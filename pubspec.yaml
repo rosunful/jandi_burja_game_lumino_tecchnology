@@ -68,6 +68,14 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  # Every asset below is bundled, so the game is fully playable with no
+  # network connection. Regenerate the binary ones with
+  # `python3 tools/generate_assets.py`.
+  assets:
+    - assets/symbols/
+    - assets/felt/
+    - assets/audio/
+
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

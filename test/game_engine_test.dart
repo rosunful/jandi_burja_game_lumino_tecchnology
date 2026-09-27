@@ -1,8 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:janda_burja_game_app/core/config.dart';
-import 'package:janda_burja_game_app/logic/dice_roller.dart';
 import 'package:janda_burja_game_app/logic/game_engine.dart';
-import 'package:janda_burja_game_app/logic/payout_table.dart';
 import 'package:janda_burja_game_app/logic/wallet.dart';
 import 'package:janda_burja_game_app/models/bet.dart';
 import 'package:janda_burja_game_app/models/symbol.dart';

@@ -9,7 +9,10 @@ import '../models/symbol.dart';
 /// Deliberately framework-free and mutates in place; [GameController] is
 /// responsible for notifying the UI.
 class Wallet {
+  // A named parameter cannot be named after a private field, so the
+  // initializing-formal form is not expressible here.
   Wallet({required int balance, int? selectedChip})
+    // ignore: prefer_initializing_formals
     : _balance = balance,
       _selectedChip = selectedChip ?? AppConfig.defaultChip;
 

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Jhanda / anchor. Ring is an even-odd subpath so the hole is real
+       transparency rather than a second colour. -->
+  <path fill="#FFFFFF" fill-rule="evenodd"
+        d="M50 4 A17 17 0 1 0 50 38 A17 17 0 1 0 50 4 Z
+           M50 13 A8 8 0 1 0 50 29 A8 8 0 1 0 50 13 Z"/>
+  <rect x="45" y="34" width="10" height="54" rx="2"/>
+  <rect x="26" y="50" width="48" height="9" rx="2"/>
+  <path d="M18 62 L28 62 C28 62 32 80 50 80 C68 80 72 62 72 62 L82 62
+           C82 62 74 92 50 92 C26 92 18 62 18 62 Z"/>
+</svg>

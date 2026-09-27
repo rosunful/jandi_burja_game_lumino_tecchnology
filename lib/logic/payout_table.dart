@@ -1,7 +1,6 @@
 import 'dart:math';
 
 import '../core/config.dart';
-import '../models/symbol.dart';
 
 /// The payout table: how much a wager earns for each number of matching dice.
 ///
