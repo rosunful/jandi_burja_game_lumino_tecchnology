@@ -10,6 +10,7 @@ import 'package:janda_burja_game_app/models/symbol.dart';
 import 'package:janda_burja_game_app/services/rewarded_ad_service.dart';
 import 'package:janda_burja_game_app/services/storage_service.dart';
 import 'package:janda_burja_game_app/state/game_controller.dart';
+import 'package:janda_burja_game_app/ui/screens/disclosure_gate.dart';
 import 'package:janda_burja_game_app/ui/screens/game_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -61,6 +62,13 @@ Future<void> finishRound(WidgetTester tester) async {
 /// the finder is concerned.
 void useTallViewport(WidgetTester tester) {
   tester.view.physicalSize = const Size(1000, 3000);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
+
+/// A 320x568 logical viewport, the narrowest phone worth supporting.
+void useSmallPhone(WidgetTester tester) {
+  tester.view.physicalSize = const Size(320, 568);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
 }
@@ -327,6 +335,181 @@ void main() {
     for (final Symbol s in Symbol.values) {
       expect(find.text(s.localName), findsOneWidget, reason: s.name);
     }
+    c.dispose();
+  });
+
+  testWidgets('the first-run disclosure blocks play until acknowledged', (
+    WidgetTester tester,
+  ) async {
+    useTallViewport(tester);
+    final GameController c = await buildController();
+    expect(c.ageAcknowledged, isFalse);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: GameTheme.build(),
+        home: DisclosureGate(controller: c),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Before you play'), findsOneWidget);
+    expect(find.textContaining('no way to cash out'), findsOneWidget);
+    expect(find.textContaining('18+'), findsOneWidget);
+
+    // The barrier is not dismissible, so a tap outside must not get rid of it.
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+    expect(find.text('Before you play'), findsOneWidget);
+
+    await tester.tap(find.text('I UNDERSTAND'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Before you play'), findsNothing);
+    expect(c.ageAcknowledged, isTrue);
+    c.dispose();
+  });
+
+  testWidgets('the disclosure does not reappear on a later launch', (
+    WidgetTester tester,
+  ) async {
+    useTallViewport(tester);
+    final GameController first = await buildController();
+    await first.acknowledgeAge();
+    first.dispose();
+
+    // Relaunch over the same stored preferences.
+    final StorageService storage = await StorageService.open();
+    final GameController second = GameController(
+      storage: storage,
+      ads: FakeRewardedAdService(),
+    );
+    await second.initialise();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: GameTheme.build(),
+        home: DisclosureGate(controller: second),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Before you play'), findsNothing);
+    expect(find.text('ROLL THE DICE'), findsOneWidget);
+    second.dispose();
+  });
+
+  testWidgets('settings toggles sound and haptics', (
+    WidgetTester tester,
+  ) async {
+    useTallViewport(tester);
+    final GameController c = await buildController();
+    expect(c.soundEnabled, isFalse, reason: 'the harness starts muted');
+
+    await tester.pumpWidget(wrap(c));
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.tune));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Settings'), findsOneWidget);
+
+    await tester.tap(find.text('Sound effects'));
+    await tester.pumpAndSettle();
+    expect(c.soundEnabled, isTrue);
+
+    await tester.tap(find.text('Vibration'));
+    await tester.pumpAndSettle();
+    expect(c.hapticsEnabled, isTrue);
+    c.dispose();
+  });
+
+  testWidgets('settings links to the rules screen', (
+    WidgetTester tester,
+  ) async {
+    useTallViewport(tester);
+    final GameController c = await buildController();
+    await tester.pumpWidget(wrap(c));
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.tune));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('How to play'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('How to play'), findsWidgets);
+    expect(find.textContaining('86.13%'), findsOneWidget);
+    c.dispose();
+  });
+
+  testWidgets('the ad failure message offers a retry that recovers', (
+    WidgetTester tester,
+  ) async {
+    final FakeRewardedAdService ads = FakeRewardedAdService(
+      failToLoad: true,
+    );
+    final GameController c = await buildController(
+      ads: ads,
+      startingBalance: 0,
+    );
+    await tester.pumpWidget(wrap(c));
+    await tester.pump();
+
+    await tester.tap(find.text('+${AppConfig.coinsPerRewardedAd}'));
+    await tester.pump();
+
+    expect(find.textContaining('No ad available'), findsOneWidget);
+    expect(find.text('Try again'), findsOneWidget);
+    expect(c.wallet.balance, 0);
+
+    // The network comes back and the player retries.
+    ads.failToLoad = false;
+    await tester.tap(find.text('Try again'));
+    await tester.pump();
+
+    expect(c.adState, RewardedAdState.ready);
+    expect(find.textContaining('Ad ready'), findsOneWidget);
+    c.dispose();
+  });
+
+  testWidgets('lays out on a small phone with the ad button showing', (
+    WidgetTester tester,
+  ) async {
+    useSmallPhone(tester);
+    final GameController c = await buildController(
+      ads: FakeRewardedAdService(failToLoad: true),
+      startingBalance: 0,
+    );
+    await tester.pumpWidget(wrap(c));
+    await tester.pump();
+
+    // The four-button quick-action row is the tightest layout in the game.
+    expect(find.text('Undo'), findsOneWidget);
+    expect(find.text('Repeat'), findsOneWidget);
+    expect(find.text('Clear'), findsOneWidget);
+    expect(
+      find.text('+${AppConfig.coinsPerRewardedAd}'),
+      findsOneWidget,
+      reason: 'a broke player must get the fourth button, or this test is '
+          'not covering the layout it claims to',
+    );
+    expect(tester.takeException(), isNull);
+    c.dispose();
+  });
+
+  testWidgets('lays out on a small phone with a result panel showing', (
+    WidgetTester tester,
+  ) async {
+    useSmallPhone(tester);
+    final GameController c = await buildController(startingBalance: 500);
+    await tester.pumpWidget(wrap(c));
+    await tester.pump();
+
+    await c.addBet(Symbol.crown);
+    unawaited(c.roll());
+    await finishRound(tester);
+
+    expect(c.lastRound, isNotNull);
+    expect(tester.takeException(), isNull);
     c.dispose();
   });
 }

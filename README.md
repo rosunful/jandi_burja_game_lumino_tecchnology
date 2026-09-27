@@ -14,9 +14,25 @@ Full rules and the payout mathematics: [`docs/rules.md`](docs/rules.md).
 ```bash
 flutter pub get
 flutter run                 # debug, on a connected device
-flutter test                # 71 unit and widget tests
+flutter test                # 86 unit and widget tests
 flutter analyze             # must stay clean
 ```
+
+## What is in the app
+
+- **First-run disclosure.** A non-dismissible dialog states 18+, free to play
+  and no real money before the table is reachable. Acknowledged once per
+  install, then never again. The same copy appears on the rules screen; it
+  lives in one widget so the two cannot drift apart.
+- **The table.** Six dice, six symbols, tap to stage chips, long-press to add
+  half, the minus button to wind a wager back. Undo, repeat, and clear.
+- **Results.** Winnings light the symbols that paid, with a per-wager
+  breakdown, and the balance only moves once the dice have stopped.
+- **Rules and stats.** The full payout table and odds; lifetime play and coin
+  statistics, including the player's own observed return against the published
+  86.13%.
+- **Settings.** Sound and haptics toggles, ad status with a working retry, and
+  the value disclosure.
 
 ## How it is put together
 
@@ -63,7 +79,12 @@ cannot risk the AdMob account:
 A player who runs out of coins is offered 500 coins for watching one rewarded
 video to completion. Coins are granted only from the SDK's reward callback, so
 dismissing the ad early pays nothing and the refill cannot be farmed. If no ad
-can be loaded — typically offline — the game says so and stays fully playable.
+can be loaded — typically offline — the game says so, offers a retry, and stays
+fully playable.
+
+`RewardedAdService` pushes state changes to the controller rather than
+returning them, because a real AdMob load finishes long after the call that
+started it. Without that, a retry could never report success.
 
 ## Before you publish
 

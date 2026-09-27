@@ -29,6 +29,14 @@ abstract class RewardedAdService {
   /// Current state, for enabling or disabling the watch-an-ad button.
   RewardedAdState get state;
 
+  /// Registers a listener for state changes.
+  ///
+  /// Loading an ad is asynchronous and does not report back through
+  /// [preload], so a caller that wants to tell the player "the ad you asked
+  /// for is now ready" has no way to learn it without this. Set to null to
+  /// unsubscribe.
+  set onStateChanged(void Function(RewardedAdState state)? listener);
+
   /// Initialises the SDK. Safe to call more than once.
   Future<void> initialize();
 
@@ -58,8 +66,21 @@ class AdMobRewardedAdService implements RewardedAdService {
   bool _initialised = false;
   bool _disposed = false;
 
+  void Function(RewardedAdState state)? _onStateChanged;
+
+  @override
+  set onStateChanged(void Function(RewardedAdState state)? listener) =>
+      _onStateChanged = listener;
+
   @override
   RewardedAdState get state => _state;
+
+  /// Single funnel for state changes so a listener can never miss one.
+  void _setState(RewardedAdState next) {
+    if (_state == next) return;
+    _state = next;
+    _onStateChanged?.call(next);
+  }
 
   void _log(String message) {
     onLog?.call(message);
@@ -75,7 +96,7 @@ class AdMobRewardedAdService implements RewardedAdService {
       _log('SDK initialised');
       await preload();
     } catch (error) {
-      _state = RewardedAdState.unavailable;
+      _setState(RewardedAdState.unavailable);
       _log('initialise failed: $error');
     }
   }
@@ -84,11 +105,11 @@ class AdMobRewardedAdService implements RewardedAdService {
   Future<void> preload() async {
     if (_disposed) return;
     if (!_initialised) {
-      _state = RewardedAdState.unavailable;
+      _setState(RewardedAdState.unavailable);
       return;
     }
 
-    _state = RewardedAdState.loading;
+    _setState(RewardedAdState.loading);
     try {
       await RewardedAd.load(
         adUnitId: adUnitId,
@@ -100,12 +121,12 @@ class AdMobRewardedAdService implements RewardedAdService {
               return;
             }
             _ad = ad;
-            _state = RewardedAdState.ready;
+            _setState(RewardedAdState.ready);
             _log('ad loaded and ready to show');
 
             ad.fullScreenContentCallback = FullScreenContentCallback<RewardedAd>(
               onAdDismissedFullScreenContent: (RewardedAd finished) {
-                _state = RewardedAdState.loading;
+                _setState(RewardedAdState.loading);
                 finished.dispose();
                 _ad = null;
                 // A rewarded ad can only be shown once, so immediately fetch
@@ -113,7 +134,7 @@ class AdMobRewardedAdService implements RewardedAdService {
                 preload();
               },
               onAdFailedToShowFullScreenContent: (RewardedAd failed, AdError error) {
-                _state = RewardedAdState.unavailable;
+                _setState(RewardedAdState.unavailable);
                 failed.dispose();
                 _ad = null;
                 _log('show failed: ${error.code} ${error.message}');
@@ -121,13 +142,13 @@ class AdMobRewardedAdService implements RewardedAdService {
             );
           },
           onAdFailedToLoad: (LoadAdError error) {
-            _state = RewardedAdState.unavailable;
+            _setState(RewardedAdState.unavailable);
             _log('load failed: code=${error.code} ${error.message}');
           },
         ),
       );
     } catch (error) {
-      _state = RewardedAdState.unavailable;
+      _setState(RewardedAdState.unavailable);
       _log('load threw: $error');
     }
   }
@@ -136,11 +157,11 @@ class AdMobRewardedAdService implements RewardedAdService {
   Future<bool> show({required void Function(int coins) onReward}) async {
     final RewardedAd? ad = _ad;
     if (ad == null || _disposed) {
-      _state = RewardedAdState.unavailable;
+      _setState(RewardedAdState.unavailable);
       return false;
     }
 
-    _state = RewardedAdState.showing;
+    _setState(RewardedAdState.showing);
     try {
       await ad.show(
         onUserEarnedReward: (AdWithoutView _, RewardItem reward) {
@@ -151,7 +172,7 @@ class AdMobRewardedAdService implements RewardedAdService {
       );
       return true;
     } catch (error) {
-      _state = RewardedAdState.unavailable;
+      _setState(RewardedAdState.unavailable);
       _log('show threw: $error');
       return false;
     }
@@ -183,15 +204,31 @@ class FakeRewardedAdService implements RewardedAdService {
   final int rewardAmount;
 
   /// Simulates no network so the unavailable path can be exercised.
-  final bool failToLoad;
+  ///
+  /// Deliberately mutable so a test can start offline, then flip it to model
+  /// the connection coming back when the player taps "try again".
+  bool failToLoad;
 
   int showCount = 0;
   int rewardCount = 0;
 
   RewardedAdState _state = RewardedAdState.loading;
 
+  void Function(RewardedAdState state)? _onStateChanged;
+
+  @override
+  set onStateChanged(void Function(RewardedAdState state)? listener) =>
+      _onStateChanged = listener;
+
   @override
   RewardedAdState get state => _state;
+
+  /// Single funnel for state changes so a listener can never miss one.
+  void _setState(RewardedAdState next) {
+    if (_state == next) return;
+    _state = next;
+    _onStateChanged?.call(next);
+  }
 
   @override
   Future<void> initialize() async {
@@ -203,20 +240,20 @@ class FakeRewardedAdService implements RewardedAdService {
   @override
   Future<void> preload() async {
     if (failToLoad) {
-      _state = RewardedAdState.unavailable;
+      _setState(RewardedAdState.unavailable);
     } else {
-      _state = RewardedAdState.ready;
+      _setState(RewardedAdState.ready);
     }
   }
 
   @override
   Future<bool> show({required void Function(int coins) onReward}) async {
     if (failToLoad) {
-      _state = RewardedAdState.unavailable;
+      _setState(RewardedAdState.unavailable);
       return false;
     }
     showCount++;
-    _state = RewardedAdState.ready;
+    _setState(RewardedAdState.ready);
     rewardCount++;
     onReward(rewardAmount);
     return true;

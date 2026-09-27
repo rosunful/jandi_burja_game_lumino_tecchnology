@@ -61,6 +61,9 @@ class GameController extends ChangeNotifier {
       sound: _storage.loadSoundEnabled(AppConfig.soundEnabledByDefault),
       haptics: _storage.loadHapticsEnabled(AppConfig.hapticsEnabledByDefault),
     );
+    // An ad load finishes long after the call that started it, so the service
+    // pushes state changes here rather than returning them.
+    _ads.onStateChanged = _onAdStateChanged;
   }
 
   static const GameEngine _engine = GameEngine();
@@ -77,8 +80,10 @@ class GameController extends ChangeNotifier {
   RollPhase _phase = RollPhase.idle;
   RoundResult? _lastRound;
   List<Symbol> _rollingFaces = const <Symbol>[];
+  int _roundSerial = 0;
   BetRejection? _lastRejection;
   bool _adRewardPending = false;
+  bool _awaitingAdRetry = false;
   String? _adMessage;
   Timer? _adMessageTimer;
 
@@ -87,6 +92,14 @@ class GameController extends ChangeNotifier {
   GameStats get stats => _stats;
   RollPhase get phase => _phase;
   RoundResult? get lastRound => _lastRound;
+
+  /// Increments once per settled round.
+  ///
+  /// The UI keys celebrations off this rather than off [lastRound], because a
+  /// round stays on screen for as long as the player takes to acknowledge it
+  /// and every unrelated notification in the meantime would otherwise re-fire
+  /// the same confetti.
+  int get roundSerial => _roundSerial;
 
   /// Faces for the dice currently on the table.
   ///
@@ -280,6 +293,7 @@ class GameController extends ChangeNotifier {
     _wallet.applyRound(result);
     _lastRound = result;
     _rollingFaces = const <Symbol>[];
+    _roundSerial++;
     _phase = RollPhase.settled;
 
     _stats = _stats.copyWith(
@@ -351,9 +365,7 @@ class GameController extends ChangeNotifier {
       );
 
       if (!shown) {
-        _flashMessage(
-          'No ad available. Check your connection and try again shortly.',
-        );
+        _flashMessage(_noAdMessage);
       }
     } finally {
       _adRewardPending = false;
@@ -364,8 +376,35 @@ class GameController extends ChangeNotifier {
   bool get adRewardPending => _adRewardPending;
 
   /// Nudges the ad layer to fetch a replacement after a failure.
+  ///
+  /// The outcome is reported by [_onAdStateChanged] when the load lands, since
+  /// a real AdMob load completes long after this call returns.
   Future<void> retryAd() async {
+    _adMessage = null;
+    _awaitingAdRetry = true;
     await _ads.preload();
+    // A synchronous implementation (the fake, or a cached response) has
+    // already moved the state and been reported by now, so only announce a
+    // failure here if nothing else has spoken yet.
+    if (_awaitingAdRetry && _ads.state == RewardedAdState.unavailable) {
+      _awaitingAdRetry = false;
+      _flashMessage(_noAdMessage);
+    }
+    notifyListeners();
+  }
+
+  static const String _noAdMessage =
+      'No ad available. Check your connection and try again shortly.';
+
+  void _onAdStateChanged(RewardedAdState state) {
+    if (_awaitingAdRetry) {
+      _awaitingAdRetry = false;
+      if (state == RewardedAdState.ready) {
+        _flashMessage('Ad ready.');
+      } else if (state == RewardedAdState.unavailable) {
+        _flashMessage(_noAdMessage);
+      }
+    }
     notifyListeners();
   }
 

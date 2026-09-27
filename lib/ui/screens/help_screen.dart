@@ -5,6 +5,7 @@ import '../../core/theme.dart';
 import '../../logic/payout_table.dart';
 import '../../models/symbol.dart';
 import '../widgets/symbol_icon.dart';
+import '../widgets/value_disclosure.dart';
 
 /// Rules, the payout table, and the age / no-real-money acknowledgements.
 class HelpScreen extends StatelessWidget {
@@ -44,7 +45,7 @@ class HelpScreen extends StatelessWidget {
             ),
           ),
           _LimitsCard(),
-          const _AgeAndValueNotice(),
+          const ValueDisclosure(),
           const _Disclaimer(),
         ],
       ),
@@ -209,48 +210,6 @@ class _FactRow extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _AgeAndValueNotice extends StatelessWidget {
-  const _AgeAndValueNotice();
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      color: GameColors.brassDark.withValues(alpha: 0.35),
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      child: const Padding(
-        padding: EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Icon(Icons.verified_user_outlined,
-                    color: GameColors.brass, size: 18),
-                SizedBox(width: 8),
-                Text(
-                  '18+  ·  Free to play  ·  No real money',
-                  style: TextStyle(
-                    color: GameColors.cream,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: 8),
-            Text(
-              'Janda Burja is a game of chance played with coins that exist '
-              'only inside this app. There is no way to buy coins with money, '
-              'and no way to cash out coins or prizes of any kind. Winning has '
-              'no monetary value whatsoever.',
-              style: TextStyle(color: GameColors.cream, fontSize: 13),
-            ),
-          ],
-        ),
       ),
     );
   }

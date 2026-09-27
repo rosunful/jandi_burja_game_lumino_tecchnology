@@ -54,9 +54,10 @@ class AppConfig {
   /// test ads in production.
   ///
   /// TODO(RELEASE): replace with your own rewarded ad unit id before
-  /// publishing, and flip [usingTestAdIds] to false. The release build
-  /// refuses to ship while this flag is true (see
-  /// `assertNotShippingTestAds`).
+  /// publishing, then flip [usingTestAdIds] to false. While the flag is true the
+  /// settings screen shows a red reminder, which is the only guard: a hard
+  /// launch failure was considered and rejected, because a crash loop in front
+  /// of real players is a worse outcome than serving an ad that pays nothing.
   static const String admobRewardedUnitId =
       'ca-app-pub-3940256099942544/5224354917';
 

@@ -5,7 +5,7 @@ import 'core/theme.dart';
 import 'services/rewarded_ad_service.dart';
 import 'services/storage_service.dart';
 import 'state/game_controller.dart';
-import 'ui/screens/game_screen.dart';
+import 'ui/screens/disclosure_gate.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -50,7 +50,7 @@ class JandaBurjaApp extends StatelessWidget {
       title: AppConfig.appName,
       debugShowCheckedModeBanner: false,
       theme: GameTheme.build(),
-      home: GameScreen(controller: controller),
+      home: DisclosureGate(controller: controller),
     );
   }
 }

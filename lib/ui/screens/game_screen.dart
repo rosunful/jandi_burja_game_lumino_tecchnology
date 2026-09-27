@@ -1,11 +1,11 @@
 import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
-
 import '../../core/config.dart';
 import '../../core/theme.dart';
 import '../../logic/game_engine.dart';
 import '../../models/bet.dart';
 import '../../models/symbol.dart';
+import '../../services/rewarded_ad_service.dart';
 import '../../state/game_controller.dart';
 import '../widgets/balance_bar.dart';
 import '../widgets/betting_board.dart';
@@ -13,6 +13,7 @@ import '../widgets/chip_selector.dart';
 import '../widgets/die_face_view.dart';
 import '../widgets/symbol_icon.dart';
 import 'help_screen.dart';
+import 'settings_screen.dart';
 import 'stats_screen.dart';
 
 /// The play surface: balance, dice, betting board, chips, quick actions.
@@ -27,6 +28,9 @@ class GameScreen extends StatefulWidget {
 
 class _GameScreenState extends State<GameScreen> {
   late final ConfettiController _confetti;
+
+  /// The [GameController.roundSerial] whose celebration has been played.
+  int _celebratedSerial = 0;
 
   @override
   void initState() {
@@ -46,9 +50,16 @@ class _GameScreenState extends State<GameScreen> {
 
   void _onControllerChanged() {
     if (!mounted) return;
-    final RoundResult? result = widget.controller.lastRound;
-    if (result != null && result.won && result.netChange > 0) {
-      _confetti.play();
+    // Celebrate on the transition into a new settled round only. Keying off
+    // `lastRound` directly would replay the confetti on every later
+    // notification, such as flipping the sound setting while a win is on
+    // screen.
+    if (widget.controller.roundSerial != _celebratedSerial) {
+      _celebratedSerial = widget.controller.roundSerial;
+      final RoundResult? result = widget.controller.lastRound;
+      if (result != null && result.won && result.netChange > 0) {
+        _confetti.play();
+      }
     }
     setState(() {});
   }
@@ -142,7 +153,12 @@ class _GameScreenState extends State<GameScreen> {
           if (c.adMessage != null)
             Align(
               alignment: const Alignment(0, 0.75),
-              child: _Toast(message: c.adMessage!),
+              child: _Toast(
+                message: c.adMessage!,
+                onRetry: c.adState == RewardedAdState.ready
+                    ? null
+                    : () => c.retryAd(),
+              ),
             ),
         ],
       ),
@@ -188,6 +204,15 @@ class _TopBar extends StatelessWidget {
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute<void>(
                 builder: (_) => StatsScreen(controller: controller),
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Settings',
+            icon: const Icon(Icons.tune),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => SettingsScreen(controller: controller),
               ),
             ),
           ),
@@ -417,6 +442,8 @@ class _QuickActions extends StatelessWidget {
                 color: GameColors.ink,
               ),
               label: Text(
+                // Never promise a reward the SDK has not handed over; the
+                // coin grant itself only happens in the reward callback.
                 controller.adRewardPending ? 'Loading' : '+${AppConfig.coinsPerRewardedAd}',
                 style: const TextStyle(color: GameColors.ink, fontSize: 13),
               ),
@@ -455,18 +482,21 @@ class _FeltBackdrop extends StatelessWidget {
   }
 }
 
+/// Transient message bar, with a retry that only appears when there is
+/// something to retry.
 class _Toast extends StatelessWidget {
-  const _Toast({required this.message});
+  const _Toast({required this.message, this.onRetry});
 
   final String message;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 26),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        margin: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
         decoration: BoxDecoration(
           color: const Color(0xEE05170F),
           borderRadius: BorderRadius.circular(12),
@@ -483,6 +513,17 @@ class _Toast extends StatelessWidget {
                 style: const TextStyle(color: GameColors.cream, fontSize: 13),
               ),
             ),
+            if (onRetry != null)
+              TextButton(
+                onPressed: onRetry,
+                style: TextButton.styleFrom(
+                  foregroundColor: GameColors.brass,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  minimumSize: const Size(0, 36),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text('Try again'),
+              ),
           ],
         ),
       ),
