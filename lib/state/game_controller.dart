@@ -76,6 +76,7 @@ class GameController extends ChangeNotifier {
 
   RollPhase _phase = RollPhase.idle;
   RoundResult? _lastRound;
+  List<Symbol> _rollingFaces = const <Symbol>[];
   BetRejection? _lastRejection;
   bool _adRewardPending = false;
   String? _adMessage;
@@ -86,6 +87,28 @@ class GameController extends ChangeNotifier {
   GameStats get stats => _stats;
   RollPhase get phase => _phase;
   RoundResult? get lastRound => _lastRound;
+
+  /// Faces for the dice currently on the table.
+  ///
+  /// The throw is generated up front and held for the length of the animation,
+  /// so the dice tumble towards the result they are actually going to show
+  /// rather than towards a placeholder. Empty while the board is face down.
+  List<Symbol> get visibleFaces {
+    if (_phase == RollPhase.rolling && _rollingFaces.isNotEmpty) {
+      return _rollingFaces;
+    }
+    return _lastRound?.faces ?? const <Symbol>[];
+  }
+
+  /// Symbols the player has money on right now, used to rim-light the dice.
+  Set<Symbol> get backedSymbols {
+    if (_phase == RollPhase.settled && _lastRound != null) {
+      return <Symbol>{
+        for (final BetResult r in _lastRound!.results) r.bet.symbol,
+      };
+    }
+    return _wallet.bets.keys.toSet();
+  }
   Map<Symbol, int> get lastBets => Map<Symbol, int>.unmodifiable(_lastBets);
   BetRejection? get lastRejection => _lastRejection;
   bool get soundEnabled => _audio.soundEnabled;
@@ -226,10 +249,18 @@ class GameController extends ChangeNotifier {
   // --------------------------------------------------------------------- roll
   /// Throws the dice and settles every staged wager.
   ///
-  /// The result is held until the player acknowledges it, so the dice stop
-  /// animating only once there is something to read.
+  /// The faces are drawn before the animation starts and the result is applied
+  /// only after it finishes, so the dice the player watches are the dice that
+  /// are scored. The result is then held until the player acknowledges it.
   Future<void> roll() async {
     if (!canRoll) return;
+
+    final List<Bet> bets = <Bet>[
+      for (final MapEntry<Symbol, int> e in _wallet.bets.entries)
+        Bet(symbol: e.key, amount: e.value),
+    ];
+    _lastBets = Map<Symbol, int>.from(_wallet.snapshotBets());
+    _rollingFaces = _roller.roll();
 
     _phase = RollPhase.rolling;
     _lastRound = null;
@@ -239,20 +270,16 @@ class GameController extends ChangeNotifier {
     unawaited(_audio.play(GameSound.diceRattle));
     unawaited(_audio.haptic(HapticLevel.medium));
 
-    final List<Bet> bets = <Bet>[
-      for (final MapEntry<Symbol, int> e in _wallet.bets.entries)
-        Bet(symbol: e.key, amount: e.value),
-    ];
-    _lastBets = Map<Symbol, int>.from(_wallet.snapshotBets());
-
-    final List<Symbol> faces = _roller.roll();
-    await Future<void>.delayed(const Duration(milliseconds: 900));
+    // Slightly longer than the tumble in DieFaceView, so the last thing the
+    // player sees moving is the dice coming to rest, not the numbers appearing.
+    await Future<void>.delayed(const Duration(milliseconds: 950));
 
     unawaited(_audio.play(GameSound.diceRoll));
 
-    final RoundResult result = _engine.settle(bets, faces);
+    final RoundResult result = _engine.settle(bets, _rollingFaces);
     _wallet.applyRound(result);
     _lastRound = result;
+    _rollingFaces = const <Symbol>[];
     _phase = RollPhase.settled;
 
     _stats = _stats.copyWith(

@@ -65,6 +65,15 @@ class RoundResult {
   /// True when the player lost every wager, the common case at this RTP.
   bool get lostEverything => netChange < 0 && totalStake > 0;
 
-  int get totalReturned =>
-      results.fold(0, (int sum, BetResult r) => sum + r.profit);
+  /// Coins actually paid back to the player: a winning wager returns its stake
+  /// plus the profit, a losing wager returns nothing.
+  ///
+  /// This is the numerator of the observed return to player, so it must count
+  /// returned stakes. It is deliberately *not* [netChange]: summing profits
+  /// alone would report a "return" of -13.87% instead of the true 86.13%.
+  /// [netFromPlay] is `totalReturned - totalStake` and does equal [netChange].
+  int get totalReturned => results.fold(
+    0,
+    (int sum, BetResult r) => sum + (r.won ? r.bet.amount + r.profit : 0),
+  );
 }

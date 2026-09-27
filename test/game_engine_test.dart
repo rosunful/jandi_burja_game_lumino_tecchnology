@@ -377,4 +377,53 @@ void main() {
       expect(w.selectedChip, 100, reason: '37 is not a real chip');
     });
   });
+
+  group('gross return accounting', () {
+    test('a losing wager returns nothing, a winning wager returns stake plus profit', () {
+      const Bet losing = Bet(symbol: Symbol.crown, amount: 100);
+      const Bet winning = Bet(symbol: Symbol.heart, amount: 200);
+      final RoundResult result = const GameEngine().settle(
+        <Bet>[losing, winning],
+        <Symbol>[
+          Symbol.crown, // crown x1 -> loses
+          Symbol.heart, // heart x2 -> wins 2x
+          Symbol.heart,
+          Symbol.spade,
+          Symbol.spade,
+          Symbol.spade,
+        ],
+      );
+
+      expect(result.netChange, 400 - 100);
+      expect(
+        result.totalReturned,
+        200 + 400,
+        reason: 'the winning wager returns its 200 stake plus 400 profit',
+      );
+      expect(
+        result.totalReturned - result.totalStake,
+        result.netChange,
+        reason: 'gross return minus stake must equal the balance change, '
+            'otherwise the stats screen would misreport the player RTP',
+      );
+    });
+
+    test('a round with no winning wager returns nothing at all', () {
+      final RoundResult result = const GameEngine().settle(
+        <Bet>[const Bet(symbol: Symbol.crown, amount: 50)],
+        <Symbol>[
+          Symbol.crown,
+          Symbol.heart,
+          Symbol.heart,
+          Symbol.spade,
+          Symbol.spade,
+          Symbol.spade,
+        ],
+      );
+
+      expect(result.won, isFalse);
+      expect(result.totalReturned, 0);
+      expect(result.totalReturned - result.totalStake, result.netChange);
+    });
+  });
 }
