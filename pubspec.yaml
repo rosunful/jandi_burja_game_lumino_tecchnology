@@ -35,6 +35,17 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
+  # Rewarded video ads. Android/iOS only - the SDK has no Linux/web target.
+  google_mobile_ads: ^9.1.0
+  # Coin balance, last bet and lifetime statistics survive app restarts.
+  shared_preferences: ^2.5.5
+  # Plays the bundled offline WAV sound effects.
+  audioplayers: ^6.1.0
+  # Renders the bundled hand-authored symbol art as crisp vectors.
+  flutter_svg: ^2.2.0
+  # Win-round celebration.
+  confetti: ^0.8.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

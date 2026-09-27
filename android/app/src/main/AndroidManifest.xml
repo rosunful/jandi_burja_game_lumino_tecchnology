@@ -1,8 +1,22 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required by the Google Mobile Ads SDK to fetch ads. The game itself
+         is fully playable offline; only the optional watch-an-ad refill needs
+         network access. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <application
-        android:label="janda_burja_game_app"
+        android:label="Janda Burja"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- AdMob application id.
+             THIS IS GOOGLE'S OFFICIAL TEST ID. It serves dummy ads and earns no
+             revenue. It is intentional during development: shipping with test ids
+             gets an AdMob account suspended.
+             To go live, replace the value below with your own AdMob app id. -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3940256099942544~3347511713" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
