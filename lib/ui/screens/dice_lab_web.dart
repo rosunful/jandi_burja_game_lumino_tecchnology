@@ -1,4 +1,4 @@
-/// Everything about the practice table that lives inside the web view.
+/// Everything about the 3D dice that lives inside the web view.
 ///
 /// The dice, the physics and the page chrome are a self-contained HTML/CSS/JS
 /// application served into a [ModelViewer] from a loopback HTTP server. Flutter
@@ -7,22 +7,35 @@
 /// is the whole reason this screen is not another `CustomPainter` - the frame
 /// budget belongs to the throw, not to the widget tree.
 ///
-/// The seam back into Flutter is two [JavascriptChannel]s, declared in
-/// [buildDiceLabViewer] and called from [diceLabJs]:
+/// One page serves two screens, told apart by the `DICE_GAME` flag Dart writes
+/// immediately above the script:
 ///
-/// * `DiceNav` - the back arrow in the page's app bar.
-/// * `DiceAudio` - every throw, so the practice table is not the one screen in
+/// * **Practice** ([buildDiceLabViewer]) - free throws, 1..6 dice chosen on the
+///   page, history and a dice-count picker, the player decides when to throw.
+///   Its seam back into Flutter is two [JavascriptChannel]s called from
+///   [diceLabJs]: `DiceNav` for the back arrow in the page's app bar, and
+///   `DiceAudio` on every throw so the practice table is not the one screen in
 ///   the app that is silent.
+/// * **The real-money throw** ([buildGameThrowViewer]) - always the game's six
+///   dice, no chrome, no tap to rethrow, and the faces are not the page's to
+///   choose: Dart sends them in and waits for the page to report that they have
+///   landed. Its seam is the other two channels, `DiceReady` and `DiceSettled`.
 ///
-/// Neither is optional at the call site: both are guarded in JS, because a
-/// missing channel must degrade to "no sound, no shortcut" rather than to a
-/// `JS ERROR` banner over the dice.
+/// Neither channel is optional at its call site: all four are guarded in JS,
+/// because a missing channel must degrade to "no sound, no shortcut" rather
+/// than to a `JS ERROR` banner over the dice.
 library;
+
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:model_viewer_plus/model_viewer_plus.dart';
+import 'package:webview_flutter/webview_flutter.dart' show WebViewController;
 
-/// Styling for the practice table, injected as [ModelViewer.relatedCss].
+import '../../core/config.dart';
+import '../../models/symbol.dart';
+
+/// Styling for the 3D dice page, injected as [ModelViewer.relatedCss].
 ///
 /// Positioning is fixed rather than flowed on purpose: the dice are moved by
 /// writing a `transform` each frame, and a fixed element never triggers layout,
@@ -112,7 +125,11 @@ html, body {
 const String diceLabJs = r'''
 (function () {
   // ================== TWEAK THESE ==================
-  var START_COUNT = 2;   // dice at start (1..MAX_DICE)
+  // DICE_GAME and DICE_COUNT come from Dart, written immediately above this
+  // script so they are set before the IIFE reads them. The practice table is
+  // free and self-governed; the real-money throw is fixed at the game's six
+  // dice and has no bar of its own to spend height on.
+  var START_COUNT = DICE_GAME ? DICE_COUNT : 2;   // dice at start (1..MAX_DICE)
   var MAX_DICE = 6;     // maximum number of dice
   // canvas / dice size for 1..10 dice (index = number of dice). More dice = smaller dice.
   var SIZES = [0, 1.0, 1.0, 0.9, 0.8, 0.72, 0.66, 0.6, 0.55, 0.5, 0.46];
@@ -122,7 +139,7 @@ const String diceLabJs = r'''
   //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   var GROUND = 0.30;     // dice size on the ground (smaller = farther away)
   var DICE_HALF = 0.22;  // half width of dice vs screen width at scale 1 (fixes contact size)
-  var BAR = 56;          // app bar height (px)
+  var BAR = DICE_GAME ? 0 : 56;   // app bar height (px); none in game mode
   var WALL = 6;          // invisible wall margin (px)
   var START_Z = 0.8;     // height the dice are thrown from (1 = closest to camera)
   var G = 7;             // gravity (lower = floatier, longer fall)
@@ -324,11 +341,14 @@ const String diceLabJs = r'''
   }
 
   // ------------------------------------------------------------------ throw
-  function throwDice(bs) {
+  // `forced` is the real-money path: Dart has already drawn the faces from
+  // DiceRoller, and the page only has to land on them. Without it the page
+  // decides for itself, which is what the practice table wants.
+  function throwDice(bs, forced) {
     rolling = true;
     say('Rolling...');
     var k, vals = [], yaws = [];
-    for (k = 0; k < act.length; k++) { vals.push(rnd(6)); yaws.push(Math.random() * 360); }
+    for (k = 0; k < act.length; k++) { vals.push(forced ? forced[k] : rnd(6)); yaws.push(Math.random() * 360); }
     var sims = simulate(bs), n = sims[0].X.length, t0 = null;
 
     function frame(now) {
@@ -355,15 +375,18 @@ const String diceLabJs = r'''
         if (history.length > MAX_HISTORY) history.pop();
         if (openId === 'h') renderHistory();
         say(vals.map(function (v) { return SYMBOLS[v]; }).join('  ') + '  |  tap to throw again');
+        // The real-money throw waits on this and nothing else, so it fires from
+        // the settle frame rather than from the release: Dart must not settle
+        // the wagers while the dice are still moving.
+        toFlutter('DiceSettled', vals.join(','));
       }
     }
     requestAnimationFrame(frame);
   }
 
-  function autoThrow() {
-    // The dice are leaving the cup now, which is when the game plays its
-    // rattle. The roll itself lands a beat later, from Flutter's side.
-    toFlutter('DiceAudio', 'throw');
+  // Releases the dice from the cup. `forced`, when given, are the faces Dart
+  // has already dealt; null lets the page choose for itself.
+  function launch(forced) {
     var b = bounds(), r0 = rad(START_Z), span = b.R - b.L - 2 * r0, m = act.length, bs = [];
     for (var k = 0; k < m; k++) {
       var a = (Math.random() * 100 - 50) * Math.PI / 180, sp = 1300 + Math.random() * 1700;
@@ -376,10 +399,35 @@ const String diceLabJs = r'''
         wr: vx * SPIN, wp: vy * SPIN, wy: (Math.random() - 0.5) * 400
       });
     }
-    throwDice(bs);
+    throwDice(bs, forced);
   }
 
+  function autoThrow() {
+    // The dice are leaving the cup now, which is when the game plays its
+    // rattle. The roll itself lands a beat later, from Flutter's side.
+    // The real-money throw stays silent here: there, Dart plays the rattle the
+    // moment it starts the throw and the landing sound from DiceSettled, so a
+    // second rattle would double up under one release.
+    if (!DICE_GAME) toFlutter('DiceAudio', 'throw');
+    launch(null);
+  }
+
+  // The one way the real-money screen throws. Dart calls it with the faces it
+  // has already dealt, so the page never decides anything that reaches the
+  // wallet. It refuses rather than guessing when it cannot honour the request,
+  // and reports the refusal on DiceSettled so Dart is never left waiting on a
+  // throw that did not happen.
+  window.diceThrow = function (vals) {
+    if (rolling) { toFlutter('DiceSettled', 'refused'); return false; }
+    W = window.innerWidth; H = window.innerHeight;
+    act = dice.filter(function (d) { return d.ok && d.ready && d.idx < count; });
+    if (act.length !== vals.length) { toFlutter('DiceSettled', 'refused'); return false; }
+    launch(vals);
+    return true;
+  };
+
   function onDown(e) {
+    if (DICE_GAME) return;   // the real-money throw is Dart's to start, once
     var t = e.target;
     if (t && t.closest && t.closest('#bar, #panel, #cpanel')) return; // taps on the UI
     if (openId) { closePanels(); return; }
@@ -415,6 +463,20 @@ const String diceLabJs = r'''
     say(loadedCount < shown.length ? 'Loading dice ' + loadedCount + '/' + shown.length + '...' : 'Tap to throw the dice');
   }
 
+  // The real-money throw's gate. Dart will not deal a round until every die on
+  // the table has loaded, so a page that half-starts falls back to the 2D dice
+  // instead of throwing six dice and showing four. Practice never sends this -
+  // it has its own "Loading dice..." text and a tap to discover the rest.
+  var readySent = false;
+  function maybeReady() {
+    if (!DICE_GAME || readySent) return;
+    var shown = dice.filter(function (d) { return d.ok && d.idx < count; });
+    if (shown.length < count) return;
+    for (var i = 0; i < shown.length; i++) if (!shown[i].ready) return;
+    readySent = true;
+    toFlutter('DiceReady', 'ready');
+  }
+
   function styleDie(d) {
     var e = d.el;
     e.style.setProperty('width', (ELEM * 100) + 'vw', 'important');
@@ -443,6 +505,7 @@ const String diceLabJs = r'''
       d.ready = true;
       setOri(d, f[0], f[1], Math.random() * 360);
       statusText();
+      maybeReady();
     });
     return d;
   }
@@ -481,11 +544,19 @@ const String diceLabJs = r'''
     dice.forEach(function (d, i) {
       if (i < count && d.ok) { var s = restSpot(d); place(d, s.x, s.y, 0); }
     });
-    $('cnt').textContent = count;
+    // The counter lives in the page's bar, which game mode never builds.
+    if ($('cnt')) $('cnt').textContent = count;
     statusText();
+    maybeReady();
   }
 
   function buildUI() {
+    // The real-money throw has no page chrome at all: Flutter draws the button,
+    // the result and the way out, and a bar painted inside the view would sit
+    // in the middle of the screen rather than at the top of it. Everything
+    // below this line is therefore practice-only.
+    if (DICE_GAME) return;
+
     label = mk('div', 'label', 'Loading dice...');
     document.body.appendChild(label);
 
@@ -543,18 +614,52 @@ const String diceLabJs = r'''
 })();
 ''';
 
-/// Builds the web view that is the body of the practice table.
+/// How long the real-money throw waits for the page to finish loading before
+/// it falls back to the 2D dice.
 ///
-/// [onBack] fires when the arrow in the page's app bar is tapped and [onThrow]
-/// on every throw; both are called from the web view, so a caller must expect
-/// them at any time and must not assume they arrive from a user gesture on the
-/// Flutter side.
+/// The model ships in the bundle and the server is on loopback, so this is
+/// generous rather than long: it only costs anything when the page is genuinely
+/// never going to arrive, and then it costs a spinner instead of a locked board.
+const Duration pageLoadTimeout = Duration(seconds: 5);
+
+/// How long the real-money throw waits for the dice to come to rest.
 ///
-/// The page is served from a loopback HTTP server started by the widget, which
-/// is why the Android manifest permits cleartext traffic to localhost.
-Widget buildDiceLabViewer({
-  required VoidCallback onBack,
-  required VoidCallback onThrow,
+/// The physics is capped at `NMAX = 240 * 9` frames and plays back in real
+/// time, so nine seconds is the longest a healthy page can take. This is the
+/// guard against an unhealthy one: `GameController.roll` is awaiting this
+/// future, and a page that stops answering must not leave the board stuck in
+/// `RollPhase.rolling` with the back button disabled.
+const Duration landingTimeout = Duration(seconds: 10);
+
+/// Overrides applied only to the real-money throw, appended to [diceLabCss].
+///
+/// Appended rather than prepended on purpose: both are written into one style
+/// block at equal specificity, so the later rule wins. The page normally paints
+/// its own green felt, but on the throw screen the dice sit inside the app's
+/// own column and the felt behind the view has to show through.
+const String _gameCss = r'''
+html, body { background: transparent !important; background-image: none !important; }
+''';
+
+/// The page for one mode: the flags first, then the script that reads them.
+///
+/// Both modes share one copy of the physics; only these two variables tell them
+/// apart, and they have to be set before the IIFE runs.
+String _pageJs({required bool game}) =>
+    'var DICE_GAME = ${game ? 'true' : 'false'};\n'
+    'var DICE_COUNT = ${AppConfig.diceCount};\n'
+    '$diceLabJs';
+
+/// One [ModelViewer] over the shared page, differing only in how it is dressed
+/// and which channels it carries.
+///
+/// Served from a loopback HTTP server started by the widget, which is why the
+/// Android manifest permits cleartext traffic to localhost.
+Widget _diceViewer({
+  required String css,
+  required String js,
+  required Set<JavascriptChannel> channels,
+  void Function(WebViewController controller)? onWebViewCreated,
 }) {
   return ModelViewer(
     id: 'dice',
@@ -572,17 +677,140 @@ Widget buildDiceLabViewer({
     minCameraOrbit: 'auto 0deg auto',
     maxCameraOrbit: 'auto 180deg auto',
     debugLogging: false,
-    javascriptChannels: <JavascriptChannel>{
-      JavascriptChannel(
-        'DiceNav',
-        onMessageReceived: (_) => onBack(),
-      ),
-      JavascriptChannel(
-        'DiceAudio',
-        onMessageReceived: (_) => onThrow(),
-      ),
-    },
-    relatedCss: diceLabCss,
-    relatedJs: diceLabJs,
+    onWebViewCreated: onWebViewCreated,
+    javascriptChannels: channels,
+    relatedCss: css,
+    relatedJs: js,
   );
+}
+
+/// Builds the web view that is the body of the practice table.
+///
+/// [onBack] fires when the arrow in the page's app bar is tapped and [onThrow]
+/// on every throw; both are called from the web view, so a caller must expect
+/// them at any time and must not assume they arrive from a user gesture on the
+/// Flutter side.
+Widget buildDiceLabViewer({
+  required VoidCallback onBack,
+  required VoidCallback onThrow,
+}) {
+  return _diceViewer(
+    css: diceLabCss,
+    js: _pageJs(game: false),
+    channels: <JavascriptChannel>{
+      JavascriptChannel('DiceNav', onMessageReceived: (_) => onBack()),
+      JavascriptChannel('DiceAudio', onMessageReceived: (_) => onThrow()),
+    },
+  );
+}
+
+/// Builds the web view that carries a real, coin-affecting throw.
+///
+/// [onController] hands over the page's own web view so a [WebDiceThrowBridge]
+/// can call into it, [onReady] fires once every die has loaded and [onSettled]
+/// once they have come to rest. All three are called from the web view, so a
+/// caller must expect them at any time.
+Widget buildGameThrowViewer({
+  required void Function(WebViewController controller) onController,
+  required VoidCallback onReady,
+  required VoidCallback onSettled,
+}) {
+  return _diceViewer(
+    css: '$diceLabCss$_gameCss',
+    js: _pageJs(game: true),
+    channels: <JavascriptChannel>{
+      JavascriptChannel('DiceReady', onMessageReceived: (_) => onReady()),
+      JavascriptChannel('DiceSettled', onMessageReceived: (_) => onSettled()),
+    },
+    onWebViewCreated: onController,
+  );
+}
+
+/// The Dart half of one 3D throw: show the page, start it on faces Dart chose,
+/// and report when the dice have landed.
+///
+/// Two implementations. [WebDiceThrowBridge] is the real one, holding the web
+/// view behind [buildGameThrowViewer]. Tests install a fake through
+/// `RollScreen.bridgeOverride`, because neither the loopback server nor the
+/// platform web view exists under `flutter test`.
+abstract interface class DiceThrowBridge {
+  /// The page itself. Built once by the screen that needs it, so the web view
+  /// and its server are not restarted on every rebuild.
+  Widget buildViewer();
+
+  /// Resolves true once every die has loaded, or false if [timeout] passes
+  /// first - which is the signal to show the 2D dice instead.
+  Future<bool> waitForReady({Duration timeout = pageLoadTimeout});
+
+  /// Throws [faces] and resolves once the dice have come to rest.
+  ///
+  /// Bounded by [timeout] on purpose: the caller is `GameController.roll`, and
+  /// a page that never reports a landing must not hold the board hostage.
+  Future<void> land(List<Symbol> faces, {Duration timeout = landingTimeout});
+}
+
+/// The real bridge, over `model_viewer_plus` and `webview_flutter`.
+class WebDiceThrowBridge implements DiceThrowBridge {
+  WebViewController? _controller;
+
+  /// The page posting `DiceReady`. One-shot, and guarded because a page can
+  /// only be loaded once per viewer.
+  final Completer<void> _ready = Completer<void>();
+
+  /// The page posting `DiceSettled`. Created per throw in [land], since the
+  /// refusal path can report before the call that triggered it returns.
+  Completer<void>? _settled;
+
+  @override
+  Widget buildViewer() => buildGameThrowViewer(
+    onController: (WebViewController controller) => _controller = controller,
+    onReady: () {
+      if (!_ready.isCompleted) _ready.complete();
+    },
+    onSettled: () {
+      final Completer<void>? settled = _settled;
+      if (settled != null && !settled.isCompleted) settled.complete();
+    },
+  );
+
+  @override
+  Future<bool> waitForReady({Duration timeout = pageLoadTimeout}) async {
+    try {
+      await _ready.future.timeout(timeout);
+      return true;
+    } on TimeoutException {
+      return false;
+    }
+  }
+
+  @override
+  Future<void> land(
+    List<Symbol> faces, {
+    Duration timeout = landingTimeout,
+  }) async {
+    final WebViewController? controller = _controller;
+    // The viewer was never attached to a web view. Returning settles the round
+    // immediately rather than waiting for a message no channel can deliver.
+    if (controller == null) return;
+
+    final Completer<void> landed = Completer<void>();
+    _settled = landed;
+    final String values = faces.map((Symbol face) => face.dieNumber).join(',');
+
+    try {
+      await controller.runJavaScript(
+        'window.diceThrow && window.diceThrow([$values]);',
+      );
+      await landed.future.timeout(timeout);
+    } on TimeoutException {
+      // The page stopped answering after the throw started. The faces being
+      // scored are Dart's either way, so the round settles on them instead of
+      // leaving the board locked behind `RollPhase.rolling`.
+    } catch (_) {
+      // The web view went away underneath the throw, most often because the
+      // route was torn down. Same answer: settle rather than deadlock.
+    } finally {
+      if (identical(_settled, landed)) _settled = null;
+    }
+  }
 }

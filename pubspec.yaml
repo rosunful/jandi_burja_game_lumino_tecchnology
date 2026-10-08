@@ -49,6 +49,10 @@ dependencies:
   # throw physics running as JavaScript in that view rather than on the UI
   # thread. Android/iOS/web only - like the ads SDK, there is no desktop target.
   model_viewer_plus: ^1.10.0
+  # The Dart half of the real-money 3D throw: the bridge captures the web view
+  # behind model_viewer_plus so it can tell the page which faces to land on.
+  # Already in the lock file as a transitive dependency of the above.
+  webview_flutter: ^4.14.1
 
   path_provider: ^2.1.0
 

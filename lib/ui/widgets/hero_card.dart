@@ -6,7 +6,6 @@ import '../../state/game_controller.dart';
 import 'symbol_icon.dart';
 
 /// What the player owns, and where more of it comes from.
-///
 /// The balance is the number a player looks at most often, so it gets the card
 /// to itself on the left at a size that can be read across a table, with the
 /// coin refill on the right where it is visible long before the balance runs
@@ -18,7 +17,6 @@ class HeroCard extends StatelessWidget {
   const HeroCard({super.key, required this.controller});
 
   final GameController controller;
-
   @override
   Widget build(BuildContext context) {
     final int balance = controller.wallet.balance;

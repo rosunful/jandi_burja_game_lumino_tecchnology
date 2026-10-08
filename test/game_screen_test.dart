@@ -878,7 +878,7 @@ void main() {
       await tester.pumpWidget(wrap(c));
       await tester.pump();
 
-      await tester.tap(find.text('3D DICE'));
+      await tester.tap(find.text('CUSTOM 3D DICE'));
       await tester.pumpAndSettle();
       expect(find.byType(DiceLabScreen), findsOneWidget);
       c.dispose();
@@ -891,7 +891,7 @@ void main() {
       await tester.pumpWidget(wrap(c));
       await tester.pump();
 
-      await tester.tap(find.text('3D DICE'));
+      await tester.tap(find.text('CUSTOM 3D DICE'));
       await tester.pumpAndSettle();
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
@@ -901,7 +901,7 @@ void main() {
       expect(c.wallet.totalBet, 0);
       expect(c.wallet.balance, 500);
       expect(c.phase, RollPhase.idle);
-      expect(find.text('3D DICE'), findsOneWidget);
+      expect(find.text('CUSTOM 3D DICE'), findsOneWidget);
       c.dispose();
     });
 
@@ -916,9 +916,9 @@ void main() {
       // Pinned with the throw, so it is on screen rather than below the fold on
       // the smallest phone the app is expected to run on, and the throw is the
       // control that keeps its space.
-      expect(find.byIcon(Icons.view_in_ar_outlined), findsOneWidget);
-      expect(find.text('3D DICE'), findsNothing);
-      expect(find.byTooltip('Dice practice'), findsOneWidget);
+      expect(find.byIcon(Icons.threed_rotation), findsOneWidget);
+      expect(find.text('CUSTOM 3D DICE'), findsNothing);
+      expect(find.byTooltip('Custom 3D dice'), findsOneWidget);
 
       final Size roll = tester.getSize(
         find.widgetWithText(FilledButton, 'ROLL THE DICE'),
@@ -935,13 +935,13 @@ void main() {
       await tester.pumpWidget(wrap(c));
       await tester.pump();
 
-      expect(find.text('3D DICE'), findsOneWidget);
+      expect(find.text('CUSTOM 3D DICE'), findsOneWidget);
       final Size roll = tester.getSize(
         find.widgetWithText(FilledButton, 'ROLL THE DICE'),
       );
       expect(
         roll.width,
-        greaterThan(tester.getSize(find.text('3D DICE')).width * 2),
+        greaterThan(tester.getSize(find.text('CUSTOM 3D DICE')).width * 2),
       );
       c.dispose();
     });

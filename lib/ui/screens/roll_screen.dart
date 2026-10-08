@@ -11,6 +11,7 @@ import '../../state/game_controller.dart';
 import '../widgets/die_face_view.dart';
 import '../widgets/felt_backdrop.dart';
 import '../widgets/symbol_icon.dart';
+import 'dice_lab_web.dart';
 
 /// The throw itself: dice at the top, the outcome anchored to the bottom.
 ///
@@ -18,10 +19,28 @@ import '../widgets/symbol_icon.dart';
 /// they move, and so the result is the only thing at eye level once they stop.
 /// Reached by pushing a route, which means the Android back button also returns
 /// to the table; either way the betting screen clears the board on return.
+///
+/// Two ways to throw. The default tumbles the 2D dice with [DieFaceView]. With
+/// [throw3d] the dice are the same physical page the practice table uses, but
+/// driven the other way round: Dart deals the faces, sends them into the page,
+/// and settles the wagers when the page reports they have landed. Same result
+/// panel, same balance, same round - only the dice are real.
 class RollScreen extends StatefulWidget {
-  const RollScreen({super.key, required this.controller});
+  const RollScreen({super.key, required this.controller, this.throw3d = false});
 
   final GameController controller;
+
+  /// True to throw through the 3D web-view dice rather than [DieFaceView].
+  final bool throw3d;
+
+  /// Test seam for [throw3d].
+  ///
+  /// The real bridge opens a local HTTP server and a platform web view in its
+  /// `initState`, and neither exists under `flutter test`, where no plugin is
+  /// registered. Tests install a fake and get a plain placeholder body plus a
+  /// throw they can time by hand; leaving it null is what a device sees.
+  @visibleForTesting
+  static DiceThrowBridge Function()? bridgeOverride;
 
   @override
   State<RollScreen> createState() => _RollScreenState();
@@ -33,6 +52,16 @@ class _RollScreenState extends State<RollScreen> {
   /// The [GameController.roundSerial] whose celebration has been played.
   int _celebratedSerial = 0;
 
+  /// Only created for a 3D throw: the 2D path has nothing to talk to.
+  DiceThrowBridge? _bridge;
+
+  /// Built once in [initState] so a rebuild cannot restart the page's server.
+  Widget? _throw3dViewer;
+
+  /// Whether the dice on screen are the page's. Flipped to false if the page
+  /// never loads, which is the whole of the 2D fallback.
+  bool _show3d = false;
+
   @override
   void initState() {
     super.initState();
@@ -40,14 +69,44 @@ class _RollScreenState extends State<RollScreen> {
       duration: const Duration(milliseconds: 1400),
     );
     widget.controller.addListener(_onControllerChanged);
+
+    if (widget.throw3d) {
+      _bridge = RollScreen.bridgeOverride?.call() ?? WebDiceThrowBridge();
+      _throw3dViewer = _bridge!.buildViewer();
+      _show3d = true;
+    }
+
     // Deferred to after the first frame. `roll()` notifies the controller
     // synchronously, and the betting screen listening to it is not an ancestor
     // of this route, so notifying here would mark it dirty mid-build.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        unawaited(widget.controller.roll());
-      }
+      if (!mounted) return;
+      unawaited(widget.controller.roll(thrower: _show3d ? _throw3d : null));
     });
+  }
+
+  /// Runs one 3D throw on the faces [GameController.roll] has already dealt.
+  ///
+  /// Handed to the controller as its `thrower`, so it owns the wait between
+  /// "dice are moving" and "dice have landed" and nothing else: the phase
+  /// machine, the sounds and the settlement stay there.
+  Future<void> _throw3d(List<Symbol> faces) async {
+    final DiceThrowBridge? bridge = _bridge;
+    if (bridge == null) return;
+
+    final bool ready = await bridge.waitForReady();
+    if (!ready) {
+      // The page never arrived. Show the 2D dice and give them the tumble they
+      // would have had, so the round completes here instead of the player
+      // staring at a view that will not load.
+      if (mounted) {
+        setState(() => _show3d = false);
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 950));
+      return;
+    }
+
+    await bridge.land(faces);
   }
 
   @override
@@ -96,8 +155,16 @@ class _RollScreenState extends State<RollScreen> {
                     // the result panel and the button below own the bottom of
                     // the screen; centring on the viewport would push the dice
                     // behind them.
+                    //
+                    // The 3D page gets that space outright rather than being
+                    // centred inside it: a platform web view sizes to the box
+                    // it is given, and the page positions its own dice against
+                    // the top of that box, so a loose fit would put them
+                    // somewhere other than where the result talks about.
                     Expanded(
-                      child: Center(child: _DiceTable(controller: c)),
+                      child: _show3d && _throw3dViewer != null
+                          ? SizedBox.expand(child: _throw3dViewer)
+                          : Center(child: _DiceTable(controller: c)),
                     ),
                     if (result != null)
                       _ResultPanel(result: result, balance: c.wallet.balance)

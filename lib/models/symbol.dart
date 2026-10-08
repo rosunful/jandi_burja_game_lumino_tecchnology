@@ -27,4 +27,22 @@ enum Symbol {
   /// [label] so the game reads as Jhandi Munda rather than a generic casino
   /// dice game. These are the names used in Nepal and northern India.
   final String localName;
+
+  /// The number printed on this symbol's die face.
+  ///
+  /// This is a contract with the 3D page, not a game rule: `SYMBOLS` in
+  /// `ui/screens/dice_lab_web.dart` maps 1 to the heart, 2 to the crown, 3 to
+  /// the spade, 4 to the club, 5 to the flag and 6 to the diamond, and the
+  /// real-money throw sends these numbers to the page so the dice the player
+  /// watches are the dice that get scored. A mismatch here would settle one
+  /// symbol against another's faces, so it is asserted value by value in
+  /// `test/symbol_test.dart`.
+  int get dieNumber => switch (this) {
+    Symbol.heart => 1,
+    Symbol.crown => 2,
+    Symbol.spade => 3,
+    Symbol.club => 4,
+    Symbol.flag => 5,
+    Symbol.diamond => 6,
+  };
 }

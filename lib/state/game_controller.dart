@@ -298,7 +298,15 @@ class GameController extends ChangeNotifier {
   /// The faces are drawn before the animation starts and the result is applied
   /// only after it finishes, so the dice the player watches are the dice that
   /// are scored. The result is then held until the player acknowledges it.
-  Future<void> roll() async {
+  ///
+  /// When [thrower] is given, it replaces the fixed 950ms wait: it is handed
+  /// the faces just drawn and resolves once the animation carrying them has
+  /// finished. That is how the 3D throw drives a real round - the web view
+  /// tumbles towards faces Dart has already chosen, rather than deciding the
+  /// outcome itself, so every number that touches the wallet still comes from
+  /// [DiceRoller]. Sound and the phase machine stay here; the thrower only
+  /// owns the wait.
+  Future<void> roll({Future<void> Function(List<Symbol> faces)? thrower}) async {
     if (!canRoll) return;
 
     final List<Bet> bets = <Bet>[
@@ -316,9 +324,16 @@ class GameController extends ChangeNotifier {
     unawaited(_audio.play(GameSound.diceRattle));
     unawaited(_audio.haptic(HapticLevel.medium));
 
-    // Slightly longer than the tumble in DieFaceView, so the last thing the
-    // player sees moving is the dice coming to rest, not the numbers appearing.
-    await Future<void>.delayed(const Duration(milliseconds: 950));
+    if (thrower == null) {
+      // Slightly longer than the tumble in DieFaceView, so the last thing the
+      // player sees moving is the dice coming to rest, not the numbers
+      // appearing.
+      await Future<void>.delayed(const Duration(milliseconds: 950));
+    } else {
+      // Bounded by the thrower itself, so a web view that never reports a
+      // landing cannot leave the board locked behind `RollPhase.rolling`.
+      await thrower(_rollingFaces);
+    }
 
     unawaited(_audio.play(GameSound.diceRoll));
 
