@@ -14,6 +14,11 @@ class AppConfig {
   static const int startingCoins = 5000;
 
   /// Coins granted for watching one rewarded video to completion.
+  ///
+  /// This is the *only* authority on the reward. The ad SDK does report a
+  /// `RewardItem`, and AdMob's own test unit reports 10, but that number is a
+  /// test artifact rather than a payout: acting on it credited 10 coins against
+  /// a button that promises this figure.
   static const int coinsPerRewardedAd = 500;
 
   /// Smallest legal wager on a single symbol.

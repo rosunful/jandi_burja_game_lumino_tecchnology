@@ -7,8 +7,11 @@ enum Symbol {
   /// Burja / Jhanda - the crown. The namesake symbol of the game.
   crown('Crown', 'burja'),
 
-  /// Jhanda / Jandi - the anchor, the second non-card-suit symbol.
-  anchor('Anchor', 'jhanda'),
+  /// Jhanda / Jandi - the flag, the second non-card-suit symbol.
+  ///
+  /// The English name is "flag", not "anchor": the traditional name for it,
+  /// jhanda, means flag, and it is the symbol the game is named after.
+  flag('Flag', 'jhanda'),
 
   heart('Heart', 'paan'),
   diamond('Diamond', 'itta'),

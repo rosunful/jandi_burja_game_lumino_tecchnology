@@ -15,61 +15,71 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-        children: <Widget>[
-          _Card(
-            title: 'Sound and feel',
+    // Pushed as its own route, so nothing above it is listening to the
+    // controller. Without this the switches would keep showing the position
+    // they were pushed with, even though the model behind them had moved.
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (BuildContext context, _) {
+        return Scaffold(
+          appBar: AppBar(title: const Text('Settings')),
+          body: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
             children: <Widget>[
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                value: controller.soundEnabled,
-                onChanged: controller.setSoundEnabled,
-                title: const Text('Sound effects'),
-                subtitle: const Text('Chips, dice and wins'),
+              _Card(
+                title: 'Sound and feel',
+                children: <Widget>[
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: controller.soundEnabled,
+                    onChanged: controller.setSoundEnabled,
+                    title: const Text('Sound effects'),
+                    subtitle: const Text('Chips, dice and wins'),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: controller.hapticsEnabled,
+                    onChanged: controller.setHapticsEnabled,
+                    title: const Text('Vibration'),
+                    subtitle: const Text('A pulse on each chip and throw'),
+                  ),
+                ],
               ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                value: controller.hapticsEnabled,
-                onChanged: controller.setHapticsEnabled,
-                title: const Text('Vibration'),
-                subtitle: const Text('A pulse on each chip and throw'),
-              ),
-            ],
-          ),
-          _AdCard(controller: controller),
-          const ValueDisclosure(),
-          _Card(
-            title: 'About',
-            children: <Widget>[
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('How to play'),
-                subtitle: const Text('Rules, payouts and odds'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(builder: (_) => const HelpScreen()),
-                ),
-              ),
-              if (AppConfig.usingTestAdIds)
-                const Padding(
-                  padding: EdgeInsets.only(top: 8),
-                  child: Text(
-                    'This build serves Google\'s test ads and earns nothing. '
-                    'Replace the ad unit id before publishing.',
-                    style: TextStyle(
-                      color: GameColors.lose,
-                      fontSize: 12,
-                      height: 1.4,
+              _AdCard(controller: controller),
+              const ValueDisclosure(),
+              _Card(
+                title: 'About',
+                children: <Widget>[
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('How to play'),
+                    subtitle: const Text('Rules, payouts and odds'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const HelpScreen(),
+                      ),
                     ),
                   ),
-                ),
+                  if (AppConfig.usingTestAdIds)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: Text(
+                        'This build serves Google\'s test ads and earns '
+                        'nothing. Replace the ad unit id before publishing.',
+                        style: TextStyle(
+                          color: GameColors.lose,
+                          fontSize: 12,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -88,7 +98,8 @@ class _AdCard extends StatelessWidget {
 
     final String description = switch (state) {
       RewardedAdState.loading => 'Looking for an ad…',
-      RewardedAdState.ready => 'Ready to watch for ${AppConfig.coinsPerRewardedAd} coins',
+      RewardedAdState.ready =>
+        'Ready to watch for ${AppConfig.coinsPerRewardedAd} coins',
       RewardedAdState.showing => 'Playing…',
       RewardedAdState.unavailable =>
         'No ad available right now. The game still works; you need coins to '

@@ -40,8 +40,7 @@ class SymbolIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String path =
-        _assetPath ?? 'assets/symbols/${symbol!.name}.svg';
+    final String path = _assetPath ?? 'assets/symbols/${symbol!.name}.svg';
     return SvgPicture.asset(
       path,
       width: size,

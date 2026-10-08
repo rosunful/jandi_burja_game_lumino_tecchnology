@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
+import '../core/config.dart';
+
 /// Lifecycle of the one rewarded ad we keep preloaded.
 enum RewardedAdState {
   /// Still fetching the next ad.
@@ -133,12 +135,13 @@ class AdMobRewardedAdService implements RewardedAdService {
                 // the next one to keep the button enabled.
                 preload();
               },
-              onAdFailedToShowFullScreenContent: (RewardedAd failed, AdError error) {
-                _setState(RewardedAdState.unavailable);
-                failed.dispose();
-                _ad = null;
-                _log('show failed: ${error.code} ${error.message}');
-              },
+              onAdFailedToShowFullScreenContent:
+                  (RewardedAd failed, AdError error) {
+                    _setState(RewardedAdState.unavailable);
+                    failed.dispose();
+                    _ad = null;
+                    _log('show failed: ${error.code} ${error.message}');
+                  },
             );
           },
           onAdFailedToLoad: (LoadAdError error) {
@@ -193,14 +196,17 @@ class AdMobRewardedAdService implements RewardedAdService {
 class FakeRewardedAdService implements RewardedAdService {
   FakeRewardedAdService({
     this.autoPreload = true,
-    this.rewardAmount = 500,
+    this.rewardAmount = AppConfig.coinsPerRewardedAd,
     this.failToLoad = false,
   });
 
   /// When true the ad becomes ready as soon as [initialize] completes.
   final bool autoPreload;
 
-  /// Coins handed out when an ad is watched to completion.
+  /// Coins this service reports when an ad is watched to completion.
+  ///
+  /// Overridable precisely so a test can model a real SDK reporting something
+  /// other than the configured grant. The controller ignores it either way.
   final int rewardAmount;
 
   /// Simulates no network so the unavailable path can be exercised.
@@ -232,9 +238,7 @@ class FakeRewardedAdService implements RewardedAdService {
 
   @override
   Future<void> initialize() async {
-    _state = failToLoad
-        ? RewardedAdState.unavailable
-        : RewardedAdState.ready;
+    _state = failToLoad ? RewardedAdState.unavailable : RewardedAdState.ready;
   }
 
   @override

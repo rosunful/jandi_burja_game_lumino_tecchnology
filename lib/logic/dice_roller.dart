@@ -9,8 +9,7 @@ import '../models/symbol.dart';
 /// the app itself uses [Random.secure] backed by the platform CSPRNG. Rolls
 /// must not be predictable, and a real casino would not accept `Random()`.
 class DiceRoller {
-  DiceRoller({Random? random})
-    : _random = random ?? Random.secure();
+  DiceRoller({Random? random}) : _random = random ?? Random.secure();
 
   final Random _random;
 

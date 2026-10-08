@@ -56,8 +56,8 @@ void main() {
 
     test('all six matching pays six times the stake', () {
       final RoundResult r = engine.settle(<Bet>[
-        const Bet(symbol: Symbol.anchor, amount: 10),
-      ], rollOf(<Symbol, int>{Symbol.anchor: 6}));
+        const Bet(symbol: Symbol.flag, amount: 10),
+      ], rollOf(<Symbol, int>{Symbol.flag: 6}));
 
       expect(r.netChange, 60);
       expect(r.results.single.matches, 6);
@@ -81,7 +81,7 @@ void main() {
     test('a round of all-losing wagers nets out to minus the total stake', () {
       final RoundResult r = engine.settle(<Bet>[
         const Bet(symbol: Symbol.crown, amount: 100),
-        const Bet(symbol: Symbol.anchor, amount: 200),
+        const Bet(symbol: Symbol.flag, amount: 200),
         const Bet(symbol: Symbol.club, amount: 50),
       ], rollOf(<Symbol, int>{Symbol.heart: 6}));
 
@@ -112,33 +112,37 @@ void main() {
     });
 
     test('exactly minDiceToWin is the boundary between loss and win', () {
-      final RoundResult losing = engine.settle(<Bet>[
-        const Bet(symbol: Symbol.crown, amount: 100),
-      ], rollOf(<Symbol, int>{Symbol.crown: AppConfig.minDiceToWin - 1, Symbol.heart: 6 - (AppConfig.minDiceToWin - 1)}));
+      final RoundResult losing = engine.settle(
+        <Bet>[const Bet(symbol: Symbol.crown, amount: 100)],
+        rollOf(<Symbol, int>{
+          Symbol.crown: AppConfig.minDiceToWin - 1,
+          Symbol.heart: 6 - (AppConfig.minDiceToWin - 1),
+        }),
+      );
 
-      final RoundResult winning = engine.settle(<Bet>[
-        const Bet(symbol: Symbol.crown, amount: 100),
-      ], rollOf(<Symbol, int>{Symbol.crown: AppConfig.minDiceToWin, Symbol.heart: 6 - AppConfig.minDiceToWin}));
+      final RoundResult winning = engine.settle(
+        <Bet>[const Bet(symbol: Symbol.crown, amount: 100)],
+        rollOf(<Symbol, int>{
+          Symbol.crown: AppConfig.minDiceToWin,
+          Symbol.heart: 6 - AppConfig.minDiceToWin,
+        }),
+      );
 
       expect(losing.netChange, -100);
       expect(winning.netChange, 100 * AppConfig.minDiceToWin);
     });
 
-    test('results and dice are unmodifiable so the UI cannot corrupt history',
-        () {
-      final RoundResult r = engine.settle(<Bet>[
-        const Bet(symbol: Symbol.crown, amount: 10),
-      ], rollOf(<Symbol, int>{Symbol.crown: 3, Symbol.heart: 3}));
+    test(
+      'results and dice are unmodifiable so the UI cannot corrupt history',
+      () {
+        final RoundResult r = engine.settle(<Bet>[
+          const Bet(symbol: Symbol.crown, amount: 10),
+        ], rollOf(<Symbol, int>{Symbol.crown: 3, Symbol.heart: 3}));
 
-      expect(
-        () => r.faces.add(Symbol.club),
-        throwsUnsupportedError,
-      );
-      expect(
-        () => r.results.clear(),
-        throwsUnsupportedError,
-      );
-    });
+        expect(() => r.faces.add(Symbol.club), throwsUnsupportedError);
+        expect(() => r.results.clear(), throwsUnsupportedError);
+      },
+    );
   });
 
   group('GameEngine.validateBet', () {
@@ -159,10 +163,7 @@ void main() {
     });
 
     test('rejects a wager below the minimum', () {
-      expect(
-        check(additional: AppConfig.minBet - 1),
-        BetRejection.tooSmall,
-      );
+      expect(check(additional: AppConfig.minBet - 1), BetRejection.tooSmall);
     });
 
     test('accepts a wager exactly at the minimum', () {
@@ -178,10 +179,7 @@ void main() {
 
     test('rejects crossing the per-symbol cap', () {
       expect(
-        check(
-          currentStake: AppConfig.maxBetPerSymbol - 10,
-          additional: 50,
-        ),
+        check(currentStake: AppConfig.maxBetPerSymbol - 10, additional: 50),
         BetRejection.perSymbolLimitReached,
       );
     });
@@ -362,10 +360,7 @@ void main() {
     test('bets view cannot be mutated from outside', () {
       final Wallet w = newWallet();
       w.addToBet(Symbol.crown, 100);
-      expect(
-        () => w.bets[Symbol.spade] = 999,
-        throwsUnsupportedError,
-      );
+      expect(() => w.bets[Symbol.spade] = 999, throwsUnsupportedError);
     });
 
     test('selectChip only accepts configured denominations', () {
@@ -379,34 +374,38 @@ void main() {
   });
 
   group('gross return accounting', () {
-    test('a losing wager returns nothing, a winning wager returns stake plus profit', () {
-      const Bet losing = Bet(symbol: Symbol.crown, amount: 100);
-      const Bet winning = Bet(symbol: Symbol.heart, amount: 200);
-      final RoundResult result = const GameEngine().settle(
-        <Bet>[losing, winning],
-        <Symbol>[
-          Symbol.crown, // crown x1 -> loses
-          Symbol.heart, // heart x2 -> wins 2x
-          Symbol.heart,
-          Symbol.spade,
-          Symbol.spade,
-          Symbol.spade,
-        ],
-      );
+    test(
+      'a losing wager returns nothing, a winning wager returns stake plus profit',
+      () {
+        const Bet losing = Bet(symbol: Symbol.crown, amount: 100);
+        const Bet winning = Bet(symbol: Symbol.heart, amount: 200);
+        final RoundResult result = const GameEngine().settle(
+          <Bet>[losing, winning],
+          <Symbol>[
+            Symbol.crown, // crown x1 -> loses
+            Symbol.heart, // heart x2 -> wins 2x
+            Symbol.heart,
+            Symbol.spade,
+            Symbol.spade,
+            Symbol.spade,
+          ],
+        );
 
-      expect(result.netChange, 400 - 100);
-      expect(
-        result.totalReturned,
-        200 + 400,
-        reason: 'the winning wager returns its 200 stake plus 400 profit',
-      );
-      expect(
-        result.totalReturned - result.totalStake,
-        result.netChange,
-        reason: 'gross return minus stake must equal the balance change, '
-            'otherwise the stats screen would misreport the player RTP',
-      );
-    });
+        expect(result.netChange, 400 - 100);
+        expect(
+          result.totalReturned,
+          200 + 400,
+          reason: 'the winning wager returns its 200 stake plus 400 profit',
+        );
+        expect(
+          result.totalReturned - result.totalStake,
+          result.netChange,
+          reason:
+              'gross return minus stake must equal the balance change, '
+              'otherwise the stats screen would misreport the player RTP',
+        );
+      },
+    );
 
     test('a round with no winning wager returns nothing at all', () {
       final RoundResult result = const GameEngine().settle(

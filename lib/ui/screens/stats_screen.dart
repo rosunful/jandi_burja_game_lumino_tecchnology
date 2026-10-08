@@ -87,11 +87,7 @@ class StatsScreen extends StatelessWidget {
 }
 
 class _StatCard extends StatelessWidget {
-  const _StatCard({
-    required this.title,
-    required this.rows,
-    this.footer,
-  });
+  const _StatCard({required this.title, required this.rows, this.footer});
 
   final String title;
   final List<_Row> rows;

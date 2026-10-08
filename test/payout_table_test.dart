@@ -103,10 +103,14 @@ void main() {
   group('Symbol', () {
     test('has exactly the six traditional faces', () {
       expect(Symbol.values.length, 6);
-      expect(
-        Symbol.values.map((Symbol s) => s.name).toList(),
-        <String>['crown', 'anchor', 'heart', 'diamond', 'club', 'spade'],
-      );
+      expect(Symbol.values.map((Symbol s) => s.name).toList(), <String>[
+        'crown',
+        'flag',
+        'heart',
+        'diamond',
+        'club',
+        'spade',
+      ]);
     });
 
     test('every symbol exposes an English and a local name', () {

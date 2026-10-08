@@ -18,7 +18,7 @@ The symbols, in betting-board order:
 | Symbol   | Local name |
 | -------- | ---------- |
 | Crown    | burja      |
-| Anchor   | jhanda     |
+| Flag     | jhanda     |
 | Heart    | paan       |
 | Diamond  | itta       |
 | Club     | chidi      |

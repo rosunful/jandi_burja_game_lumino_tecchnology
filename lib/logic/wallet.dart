@@ -24,7 +24,8 @@ class Wallet {
 
   /// Wagers staged for the round that has not been rolled yet, exposed
   /// unmodifiable so the UI cannot bypass [addToBet] and its limit checks.
-  UnmodifiableMapView<Symbol, int> get bets => UnmodifiableMapView<Symbol, int>(_bets);
+  UnmodifiableMapView<Symbol, int> get bets =>
+      UnmodifiableMapView<Symbol, int>(_bets);
 
   int get balance => _balance;
 

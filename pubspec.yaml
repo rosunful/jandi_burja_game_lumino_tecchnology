@@ -45,6 +45,12 @@ dependencies:
   flutter_svg: ^2.2.0
   # Win-round celebration.
   confetti: ^0.8.0
+  # The 3D practice table. Renders assets/dice.glb inside a web view, with the
+  # throw physics running as JavaScript in that view rather than on the UI
+  # thread. Android/iOS/web only - like the ads SDK, there is no desktop target.
+  model_viewer_plus: ^1.10.0
+
+  path_provider: ^2.1.0
 
 dev_dependencies:
   flutter_test:
@@ -75,6 +81,7 @@ flutter:
     - assets/symbols/
     - assets/felt/
     - assets/audio/
+    - assets/dice.glb
 
   # To add assets to your application, add an assets section, like this:
   # assets:

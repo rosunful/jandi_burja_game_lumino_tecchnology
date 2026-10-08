@@ -86,10 +86,7 @@ class GameTheme {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         ),
       ),
-      dividerTheme: const DividerThemeData(
-        color: Color(0x33FFFFFF),
-        space: 1,
-      ),
+      dividerTheme: const DividerThemeData(color: Color(0x33FFFFFF), space: 1),
     );
   }
 }

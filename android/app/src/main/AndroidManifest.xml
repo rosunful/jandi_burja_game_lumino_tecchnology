@@ -8,7 +8,13 @@
     <application
         android:label="Janda Burja"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true">
+        <!-- model_viewer_plus serves the dice page and assets/dice.glb from a
+             loopback HttpServer over http://127.0.0.1, which Android 9 and
+             above block by default. Scoped to the whole application attribute
+             rather than a network security config because the only cleartext
+             traffic in the app is that local server. -->
         <!-- AdMob application id.
              THIS IS GOOGLE'S OFFICIAL TEST ID. It serves dummy ads and earns no
              revenue. It is intentional during development: shipping with test ids

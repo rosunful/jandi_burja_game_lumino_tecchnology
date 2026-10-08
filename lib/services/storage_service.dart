@@ -35,6 +35,25 @@ class StorageService {
   Future<void> saveSelectedChip(int value) => _prefs.setInt(_kChip, value);
 
   // ---------------------------------------------------------------- last bets
+  /// Persisted names that no longer match a [Symbol] enum name, mapped to the
+  /// symbol they turned out to be.
+  ///
+  /// The jhanda symbol was called "anchor" before it was corrected to "flag".
+  /// Wagers are stored by enum name, and an unrecognised name is dropped rather
+  /// than guessed at, so without this every existing install would quietly lose
+  /// its saved Repeat wagers on the day the rename shipped.
+  static const Map<String, Symbol> _legacySymbolNames = <String, Symbol>{
+    'anchor': Symbol.flag,
+  };
+
+  /// Resolves a persisted symbol name, following renames where one is known.
+  static Symbol? _symbolForName(String name) {
+    for (final Symbol s in Symbol.values) {
+      if (s.name == name) return s;
+    }
+    return _legacySymbolNames[name];
+  }
+
   /// Reads the previous round's wagers so the player can repeat them.
   ///
   /// Persisted as a list of `"symbolName:amount"` strings rather than a map
@@ -50,12 +69,8 @@ class StorageService {
       final String name = entry.substring(0, split);
       final int? amount = int.tryParse(entry.substring(split + 1));
       if (amount == null || amount <= 0) continue;
-      for (final Symbol s in Symbol.values) {
-        if (s.name == name) {
-          result[s] = amount;
-          break;
-        }
-      }
+      final Symbol? symbol = _symbolForName(name);
+      if (symbol != null) result[symbol] = amount;
     }
     return result;
   }
@@ -86,14 +101,15 @@ class StorageService {
 
   Future<void> saveStats(GameStats stats) => _prefs.setString(
     _kStats,
-    stats.toMap().entries
+    stats
+        .toMap()
+        .entries
         .map((MapEntry<String, Object> e) => '${e.key}:${e.value}')
         .join(','),
   );
 
   // ------------------------------------------------------------------- toggles
-  bool loadSoundEnabled(bool fallback) =>
-      _prefs.getBool(_kSound) ?? fallback;
+  bool loadSoundEnabled(bool fallback) => _prefs.getBool(_kSound) ?? fallback;
 
   Future<void> saveSoundEnabled(bool value) => _prefs.setBool(_kSound, value);
 

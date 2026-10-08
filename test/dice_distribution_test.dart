@@ -39,7 +39,7 @@ void main() {
       ];
       expect(DiceRoller.countOf(Symbol.crown, faces), 3);
       expect(DiceRoller.countOf(Symbol.heart, faces), 1);
-      expect(DiceRoller.countOf(Symbol.anchor, faces), 0);
+      expect(DiceRoller.countOf(Symbol.flag, faces), 0);
     });
   });
 
@@ -121,7 +121,10 @@ void main() {
       for (int i = 0; i < rounds; i++) {
         final List<Symbol> faces = roller.roll();
         for (final Symbol s in Symbol.values) {
-          coinDelta += PayoutTable.profitFor(stake: stake, matches: DiceRoller.countOf(s, faces));
+          coinDelta += PayoutTable.profitFor(
+            stake: stake,
+            matches: DiceRoller.countOf(s, faces),
+          );
         }
       }
 

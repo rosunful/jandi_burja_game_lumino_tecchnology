@@ -36,11 +36,7 @@ class DieFaceView extends StatelessWidget {
         highlighted: highlighted,
       );
     }
-    return _DieBody(
-      symbol: symbol,
-      size: size,
-      highlighted: highlighted,
-    );
+    return _DieBody(symbol: symbol, size: size, highlighted: highlighted);
   }
 }
 

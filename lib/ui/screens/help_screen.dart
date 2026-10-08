@@ -64,10 +64,7 @@ class _PayoutTableCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text(
-              'PAYOUTS',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
+            Text('PAYOUTS', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 4),
             Text(
               'Wins pay the number of matching dice times your bet.',
@@ -164,10 +161,7 @@ class _LimitsCard extends StatelessWidget {
           children: <Widget>[
             Text('LIMITS', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
-            _FactRow(
-              label: 'Smallest bet',
-              value: '${AppConfig.minBet} coins',
-            ),
+            _FactRow(label: 'Smallest bet', value: '${AppConfig.minBet} coins'),
             _FactRow(
               label: 'Largest bet, one symbol',
               value: '${AppConfig.maxBetPerSymbol} coins',
@@ -269,10 +263,7 @@ class SymbolLegend extends StatelessWidget {
             children: <Widget>[
               SymbolIcon(s, size: 26, color: GameColors.cream),
               const SizedBox(width: 12),
-              Text(
-                s.label,
-                style: const TextStyle(color: GameColors.cream),
-              ),
+              Text(s.label, style: const TextStyle(color: GameColors.cream)),
               const Spacer(),
               Text(
                 s.localName,

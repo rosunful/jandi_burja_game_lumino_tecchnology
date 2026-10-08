@@ -55,6 +55,10 @@ class GameController extends ChangeNotifier {
       balance: _storage.loadBalance(AppConfig.startingCoins),
       selectedChip: _storage.loadSelectedChip() ?? AppConfig.defaultChip,
     );
+    // What the wallet was seeded with, so a tap can tell whether the choice on
+    // screen still matches what is on disk without asking storage on every
+    // chip placed.
+    _persistedChip = _wallet.selectedChip;
     _lastBets = _storage.loadLastBets();
     _stats = _storage.loadStats();
     _audio.configure(
@@ -74,6 +78,13 @@ class GameController extends ChangeNotifier {
   final DiceRoller _roller;
 
   late final Wallet _wallet;
+
+  /// The denomination last read from or written to storage.
+  ///
+  /// Placing a chip does not change the denomination, so the tap path needs
+  /// this to know a write is unnecessary without reading storage again.
+  late int _persistedChip;
+
   late Map<Symbol, int> _lastBets;
   late GameStats _stats;
 
@@ -122,10 +133,19 @@ class GameController extends ChangeNotifier {
     }
     return _wallet.bets.keys.toSet();
   }
+
   Map<Symbol, int> get lastBets => Map<Symbol, int>.unmodifiable(_lastBets);
   BetRejection? get lastRejection => _lastRejection;
   bool get soundEnabled => _audio.soundEnabled;
   bool get hapticsEnabled => _audio.hapticsEnabled;
+
+  /// The sound and haptics engine, for screens that are not part of a round.
+  ///
+  /// Read only on purpose. The practice dice are free throws, so the one thing
+  /// they must never do is touch the wallet, and handing out the whole service
+  /// makes that a convention rather than a rule. Everything the practice screen
+  /// needs from a round it gets through the engine it already has.
+  AudioService get audio => _audio;
   RewardedAdState get adState => _ads.state;
   String? get adMessage => _adMessage;
 
@@ -142,6 +162,10 @@ class GameController extends ChangeNotifier {
   // ----------------------------------------------------------------- lifecycle
   Future<void> initialise() async {
     unawaited(_ads.initialize());
+    // Off the critical path and not awaited: this preloads the tap sounds so
+    // the first chip the player places is not the slowest one. A game that
+    // boots muted does not warm at all.
+    _audio.warm();
     notifyListeners();
   }
 
@@ -159,7 +183,9 @@ class GameController extends ChangeNotifier {
   /// Returns false and surfaces a reason when the wager is not legal, so the
   /// UI can explain rather than silently ignoring the tap.
   Future<bool> addBet(Symbol symbol) async {
-    if (_phase == RollPhase.rolling || _phase == RollPhase.settled) return false;
+    if (_phase == RollPhase.rolling || _phase == RollPhase.settled) {
+      return false;
+    }
 
     final int chip = _wallet.selectedChip;
     final BetRejection? rejection = _engine.validateBet(
@@ -180,7 +206,13 @@ class GameController extends ChangeNotifier {
     _updatePhase();
     notifyListeners();
 
-    unawaited(_storage.saveSelectedChip(chip));
+    // The denomination is chosen on the coin row, not here, so this only needs
+    // writing when it is not already what is on disk. Placing twenty chips in a
+    // row used to mean twenty platform writes for one unchanged value.
+    if (chip != _persistedChip) {
+      _persistedChip = chip;
+      unawaited(_storage.saveSelectedChip(chip));
+    }
     unawaited(_audio.play(GameSound.chipPlace));
     unawaited(_audio.haptic(HapticLevel.light));
     return true;
@@ -254,6 +286,7 @@ class GameController extends ChangeNotifier {
   Future<void> selectChip(int denomination) async {
     if (_wallet.selectedChip == denomination) return;
     _wallet.selectChip(denomination);
+    _persistedChip = denomination;
     notifyListeners();
     unawaited(_storage.saveSelectedChip(denomination));
     unawaited(_audio.play(GameSound.select));
@@ -349,8 +382,12 @@ class GameController extends ChangeNotifier {
 
     try {
       final bool shown = await _ads.show(
-        onReward: (int coins) {
-          final int amount = coins > 0 ? coins : AppConfig.coinsPerRewardedAd;
+        onReward: (int _) {
+          // The SDK decides *whether* the ad was watched, never how much it
+          // pays. AdMob's own test unit reports 10, which is not a denomination
+          // this game trades in, and trusting it silently overrode the
+          // configured grant and broke the promise the UI makes on the button.
+          final int amount = AppConfig.coinsPerRewardedAd;
           _wallet.credit(amount);
           _stats = _stats.copyWith(
             adsWatched: _stats.adsWatched + 1,
