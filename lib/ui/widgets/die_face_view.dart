@@ -9,7 +9,6 @@ import 'symbol_icon.dart';
 
 /// A single die. While [spinning] is true it tumbles through random symbols and
 /// settles on [symbol].
-///
 /// [highlighted] draws a brass rim, used to point out the symbols the player
 /// backed.
 class DieFaceView extends StatelessWidget {
@@ -63,13 +62,6 @@ class _DieBody extends StatelessWidget {
           color: highlighted ? GameColors.brass : GameColors.dieEdge,
           width: highlighted ? 2.4 : 1.2,
         ),
-        boxShadow: const <BoxShadow>[
-          BoxShadow(
-            color: Color(0x66000000),
-            blurRadius: 6,
-            offset: Offset(0, 3),
-          ),
-        ],
       ),
       child: Center(
         child: SymbolIcon(symbol, size: size * 0.6, color: GameColors.ink),

@@ -52,12 +52,12 @@ html, body {
   z-index: 2; pointer-events: none;
   background: transparent !important; background-color: transparent !important;
   --poster-color: transparent;
+  --progress-bar-height: 0px;
+  --progress-bar-color: transparent;
   will-change: transform; transform-origin: 50% 50%;
 }
-.shadow {
-  position: fixed; left: 50%; top: 50%; z-index: 1; border-radius: 50%; pointer-events: none;
-  background: radial-gradient(circle at center, rgba(0,0,0,.8) 0%, rgba(0,0,0,0) 70%);
-}
+.die::part(default-progress-bar) { display: none; }
+
 #label {
   position: fixed; left: 0; right: 0; top: 66px; z-index: 3; text-align: center;
   color: #fff; font-size: 20px; pointer-events: none; padding: 0 12px;
@@ -302,9 +302,6 @@ const String diceLabJs = r'''
     d.x = x; d.y = y;
     var s = GROUND + z * (NEAR - GROUND);
     d.el.style.transform = 'translate3d(' + x + 'px,' + y + 'px,0) scale(' + s + ')';
-    d.sh.style.transform = 'translate(' + (x + z * 35) + 'px,' + (y + z * 50 + 3) +
-      'px) translate(-50%,-50%) scale(' + (s / GROUND) + ')';
-    d.sh.style.opacity = (0.1 + 0.5 * (1 - Math.min(z, 1))).toFixed(3);
   }
 
   function setOri(d, r, p, y) {
@@ -483,18 +480,13 @@ const String diceLabJs = r'''
     e.style.setProperty('height', (ELEM * 100) + 'vw', 'important');
     e.style.setProperty('left', (-(ELEM - 1) * 50) + 'vw', 'important');
     e.style.setProperty('margin-top', (-ELEM * 50) + 'vw', 'important');
-    var sw = W * DICE_HALF * ELEM * 2 * GROUND * 1.15;
-    d.sh.style.width = sw + 'px'; d.sh.style.height = sw + 'px';
   }
 
   function addDie(e) {
     e.classList.add('die');
     e.setAttribute('loading', 'eager');
 
-    var sh = mk('div'); sh.className = 'shadow';
-    document.body.appendChild(sh);
-
-    var d = { el: e, sh: sh, ok: true, ready: false, idx: dice.length };
+    var d = { el: e, ok: true, ready: false, idx: dice.length };
     dice.push(d);
     styleDie(d);
     var spot = restSpot(d);
@@ -514,7 +506,6 @@ const String diceLabJs = r'''
     if (!d.ok || d.ready) return;
     d.ok = false;
     d.el.style.display = 'none';
-    d.sh.style.display = 'none';
     say('One dice could not load - continuing with the others');
   }
 
@@ -537,7 +528,6 @@ const String diceLabJs = r'''
     dice.forEach(function (d, i) {
       var on = i < count && d.ok;
       d.el.style.display = on ? '' : 'none';
-      d.sh.style.display = on ? '' : 'none';
       d.x = undefined;
       if (on) styleDie(d);
     });
