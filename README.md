@@ -193,8 +193,12 @@ All artwork and audio is bundled, so nothing is downloaded at runtime:
 - `assets/symbols/*.svg` — six symbols plus a chip and a coin, hand-authored as
   single-colour SVG and tinted at render time
 - `assets/audio/*.wav` — chip, dice and win/lose sounds
-- `assets/dice.glb` — the 3D dice model, served to the practice table
+- `assets/dice.glb` — the 3D dice model, served to the practice table; its six
+  face textures are 256×256, which `tools/optimize_dice_glb.py` shrinks from
+  ~4.5 MB to ~0.4 MB without touching the mesh
 - `assets/felt/felt.png` — the table surface
 
 `tools/generate_assets.py` regenerates the felt texture and every sound
-deterministically, using only the standard library.
+deterministically, using only the standard library. `tools/optimize_dice_glb.py`
+re-packs the dice model the same way, resizing its textures and rewriting the
+glTF container in place (pass `--size` to change the texture edge, default 512).

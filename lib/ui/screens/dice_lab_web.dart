@@ -143,11 +143,12 @@ const String diceLabJs = r'''
   var WALL = 6;          // invisible wall margin (px)
   var START_Z = 0.8;     // height the dice are thrown from (1 = closest to camera)
   var G = 7;             // gravity (lower = floatier, longer fall)
-  var EZ = 0.5;          // ground bounce (0..1)
-  var EW = 0.6;          // wall bounce (0..1)
-  var EC = 0.75;         // dice-vs-dice bounce (0..1)
-  var MU = 0.25;         // dice-vs-dice friction (sideways scrape when they touch)
-  var FRICTION = 1500;   // ground friction (px/s^2)
+  var EZ = 0.42;         // ground bounce (0..1): less lively, more weight
+  var EW = 0.5;          // wall bounce (0..1)
+  var EC = 0.62;         // dice-vs-dice bounce (0..1)
+  var MU = 0.32;         // contact friction (the sideways scrape on a hit)
+  var WSPIN = 0.9;       // table spin a scrape along a wall imparts (deg per px/s)
+  var FRICTION = 1150;   // ground friction (px/s^2)
   var DRAG = 0.55;       // air drag
   var SPIN = 0.8;        // rolling: degrees turned per pixel travelled
   var TIMESCALE = 1;     // 0.5 = slow motion
@@ -194,7 +195,30 @@ const String diceLabJs = r'''
   }
   function rnd(n) { return 1 + Math.floor(Math.random() * n); }
   function corr(v) { return v - Math.round(v / 360) * 360; }
+  // Smallest angle between two headings, in degrees, whatever number of full
+  // turns separate the raw accumulations.
+  function angGap(a, b) {
+    var d = Math.abs(a - b) % 360;
+    return d > 180 ? 360 - d : d;
+  }
   function say(t) { if (label) label.textContent = t; }
+
+  // One die against a static wall whose inward normal is (nx, ny). Resolves the
+  // normal bounce, Coulomb friction along the wall, and the table spin that
+  // scrape imparts - so a die skids and spins off a rail like a real cube
+  // instead of reflecting with a hand-tuned twist.
+  function wallResponse(c, nx, ny) {
+    var vn = c.vx * nx + c.vy * ny;
+    if (vn >= 0) return;                 // not moving into the wall
+    var tx = -ny, ty = nx;               // along the wall
+    var vt = c.vx * tx + c.vy * ty;
+    var dvn = -(1 + EW) * vn;            // push back out of the wall
+    var maxF = MU * dvn;                 // Coulomb limit for the scrape
+    var dvt = Math.max(-maxF, Math.min(maxF, -vt));
+    c.vx += dvn * nx + dvt * tx;
+    c.vy += dvn * ny + dvt * ty;
+    c.wy -= dvt * WSPIN;
+  }
 
   // ---------------------------------------------------------------- physics
   // Each die has: position (x,y), height z, velocity (vx,vy,vz) and angular speeds
@@ -211,13 +235,17 @@ const String diceLabJs = r'''
         var c = bs[k], a = o[k];
         c.vz -= G * DT; c.z += c.vz * DT;
         if (c.z <= 0) {
+          var impact = -c.vz;                 // how hard the corner hit the felt
           c.z = 0;
-          if (Math.abs(c.vz) > 0.35) {
-            c.vz = Math.abs(c.vz) * EZ; c.vx *= 0.8; c.vy *= 0.8;
-            // landing on a corner/edge kicks the dice into a new spin
-            c.wy += (Math.random() - 0.5) * 500;
-            c.wr += (Math.random() - 0.5) * 240;
-            c.wp += (Math.random() - 0.5) * 240;
+          if (impact > 0.35) {
+            c.vz = impact * EZ;
+            c.vx *= 0.82; c.vy *= 0.82;
+            // a corner catches and kicks the die into a new tumble; the harder
+            // the landing, the bigger the kick
+            var kick = Math.min(1, impact);
+            c.wy += (Math.random() - 0.5) * 520 * kick;
+            c.wr += (Math.random() - 0.5) * 260 * kick;
+            c.wp += (Math.random() - 0.5) * 260 * kick;
           } else { c.vz = 0; }
         }
         var s0 = Math.sqrt(c.vx * c.vx + c.vy * c.vy);
@@ -227,10 +255,10 @@ const String diceLabJs = r'''
         c.x += c.vx * DT; c.y += c.vy * DT;
 
         var r = rad(c.z);
-        if (c.x < L + r) { c.x = L + r; if (c.vx < 0) { c.vx = -c.vx * EW; c.wy += c.vy * 0.4; } }
-        if (c.x > R - r) { c.x = R - r; if (c.vx > 0) { c.vx = -c.vx * EW; c.wy -= c.vy * 0.4; } }
-        if (c.y < T + r) { c.y = T + r; if (c.vy < 0) { c.vy = -c.vy * EW; c.wy += c.vx * 0.4; } }
-        if (c.y > B - r) { c.y = B - r; if (c.vy > 0) { c.vy = -c.vy * EW; c.wy -= c.vx * 0.4; } }
+        if (c.x < L + r) { c.x = L + r; wallResponse(c, 1, 0); }
+        if (c.x > R - r) { c.x = R - r; wallResponse(c, -1, 0); }
+        if (c.y < T + r) { c.y = T + r; wallResponse(c, 0, 1); }
+        if (c.y > B - r) { c.y = B - r; wallResponse(c, 0, -1); }
 
         // angular motion
         if (c.z === 0 && c.vz === 0) {
@@ -240,6 +268,8 @@ const String diceLabJs = r'''
           c.wy *= Math.pow(0.04, DT);                    // table friction slows the spin
         } else {
           c.wy *= Math.pow(0.7, DT);                     // air: spin keeps going
+          var ad = Math.pow(0.9, DT);                    // a touch of air tumble drag
+          c.wr *= ad; c.wp *= ad;
         }
         a.ar += c.wr * DT; a.ap += c.wp * DT; a.ay += c.wy * DT;
       }
@@ -254,20 +284,25 @@ const String diceLabJs = r'''
           if (dist < minD) {
             if (dist < 0.001) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; dist = Math.sqrt(dx * dx + dy * dy) || 1; }
             var nx = dx / dist, ny = dy / dist, ov = minD - dist;
-            A.x -= nx * ov / 2; A.y -= ny * ov / 2; Bd.x += nx * ov / 2; Bd.y += ny * ov / 2;
-            var rvx = Bd.vx - A.vx, rvy = Bd.vy - A.vy, rvn = rvx * nx + rvy * ny;
+            // Leave a hair of overlap and correct most of the rest, so touching
+            // dice stop micro-jittering against each other while still parting.
+            var push = Math.max(ov - 0.02 * minD, 0) * 0.5;
+            A.x -= nx * push; A.y -= ny * push; Bd.x += nx * push; Bd.y += ny * push;
+            var rvx = Bd.vx - A.vx, rvy = Bd.vy - A.vy;
+            // A cube meets a cube with a corner or a flat face, so the contact
+            // normal is a little off the centre line - jitter it about ±20°.
+            var ja = (Math.random() - 0.5) * 0.7;
+            var inx = nx * Math.cos(ja) - ny * Math.sin(ja);
+            var iny = nx * Math.sin(ja) + ny * Math.cos(ja);
+            var itx = -iny, ity = inx;                             // along the contact
+            var rvn = rvx * inx + rvy * iny;
 
             if (rvn < 0) {
-             // NEW: a cube hits with a corner or a flat face, so the push is never perfectly straight
-              var ja = (Math.random() - 0.5) * 0.7;               // about ±20°
-              var inx = nx * Math.cos(ja) - ny * Math.sin(ja);
-              var iny = nx * Math.sin(ja) + ny * Math.cos(ja);
-
-              var j = -(1 + EC) * rvn / 2;                       // bounce (equal mass)
-              var tx = -ny, ty = nx, rvt = rvx * tx + rvy * ty;  // sliding speed along the contact
+              var j = -(1 + EC) * rvn / 2;                         // bounce (equal mass)
+              var rvt = rvx * itx + rvy * ity;                     // sliding speed along the contact
               var jt = Math.max(-MU * j, Math.min(MU * j, -rvt / 2)); // friction, capped (Coulomb)
-              var dax = -j * nx - jt * tx, day = -j * ny - jt * ty;
-              var dbx = j * nx + jt * tx, dby = j * ny + jt * ty;
+              var dax = -j * inx - jt * itx, day = -j * iny - jt * ity;
+              var dbx = j * inx + jt * itx, dby = j * iny + jt * ity;
               A.vx += dax; A.vy += day; Bd.vx += dbx; Bd.vy += dby;
               // hit = tumble: the impulse also turns the dice, and the scrape makes them spin
               A.wr += dax * SPIN; A.wp += day * SPIN; Bd.wr += dbx * SPIN; Bd.wp += dby * SPIN;
@@ -284,7 +319,11 @@ const String diceLabJs = r'''
         oo.path += sp2 * DT + Math.abs(cc.vz) * DT * 300;
         oo.X.push(cc.x); oo.Y.push(cc.y); oo.Z.push(cc.z);
         oo.AR.push(oo.ar); oo.AP.push(oo.ap); oo.AY.push(oo.ay); oo.PL.push(oo.path);
-        if (!(cc.z === 0 && sp2 < 8)) allRest = false;
+        // Demand that the spin has actually died before the roll ends. With the
+        // fast table decay the die reaches these thresholds naturally, so the
+        // roll just runs the extra ~half second instead of freezing mid-spin.
+        if (!(cc.z === 0 && sp2 < 8 && Math.abs(cc.wy) < 8 &&
+              Math.abs(cc.wr) < 15 && Math.abs(cc.wp) < 15)) allRest = false;
       }
       if (allRest && i > 30) break;
     }
@@ -293,6 +332,24 @@ const String diceLabJs = r'''
       var zz = o[k], total = zz.PL[zz.PL.length - 1] || 1;
       for (i = 0; i < zz.PL.length; i++) zz.PL[i] /= total;
       zz.cr = corr(zz.ar); zz.cp = corr(zz.ap); zz.cy = corr(zz.ay);
+
+      // The path keeps a sample per step until the LAST die rests, so a die that
+      // stopped early is padded with identical values. Find the first of those
+      // trailing samples and let the render loop skip the die from there on:
+      // every skipped frame is a model-viewer scene that does not re-render.
+      var last = zz.X.length - 1;
+      var fx = zz.X[last], fy = zz.Y[last], fz = zz.Z[last], fp = zz.PL[last];
+      var fa = zz.AR[last], fb = zz.AP[last], fc = zz.AY[last];
+      zz.settle = last;
+      while (zz.settle > 0) {
+        var j = zz.settle - 1;
+        if (Math.abs(zz.X[j] - fx) < 0.05 && Math.abs(zz.Y[j] - fy) < 0.05 &&
+            Math.abs(zz.Z[j] - fz) < 0.001 && Math.abs(zz.PL[j] - fp) < 0.0005 &&
+            Math.abs(zz.AR[j] - fa) < 0.05 && Math.abs(zz.AP[j] - fb) < 0.05 &&
+            Math.abs(zz.AY[j] - fc) < 0.05) {
+          zz.settle = j;
+        } else { break; }
+      }
     }
     return o;
   }
@@ -347,36 +404,68 @@ const String diceLabJs = r'''
     var k, vals = [], yaws = [];
     for (k = 0; k < act.length; k++) { vals.push(forced ? forced[k] : rnd(6)); yaws.push(Math.random() * 360); }
     var sims = simulate(bs), n = sims[0].X.length, t0 = null;
+    var frozen = [], last = [];
+    for (k = 0; k < act.length; k++) { frozen.push(false); last.push(null); }
+
+    // Every die has stopped, so paint the exact faces, record the roll and let
+    // Flutter settle. Split out so the loop can reach it the moment the last
+    // die freezes rather than ticking through the precomputed tail.
+    function finish() {
+      var sum = 0;
+      for (var j = 0; j < act.length; j++) {
+        var ff = FACES[vals[j]];
+        setOri(act[j], ff[0], ff[1], yaws[j]);
+        sum += vals[j];
+      }
+      rolling = false;
+      rollNo++;
+      history.unshift({ no: rollNo, vals: vals.slice(), sum: sum });
+      if (history.length > MAX_HISTORY) history.pop();
+      if (openId === 'h') renderHistory();
+      say(vals.map(function (v) { return SYMBOLS[v]; }).join('  ') + '  |  tap to throw again');
+      // The real-money throw waits on this and nothing else, so it fires from
+      // the settle frame rather than from the release: Dart must not settle
+      // the wagers while the dice are still moving.
+      toFlutter('DiceSettled', vals.join(','));
+    }
 
     function frame(now) {
       if (t0 === null) t0 = now;
       var simT = (now - t0) / 1000 * TIMESCALE;
       var i = Math.min(Math.floor(simT / DT), n - 1);
+      var allFrozen = true;
       for (var k = 0; k < act.length; k++) {
-        var s = sims[k], p = s.PL[i], f = FACES[vals[k]];
-        place(act[k], s.X[i], s.Y[i], s.Z[i]);
-        setOri(act[k], f[0] + s.AR[i] - s.cr * p, f[1] + s.AP[i] - s.cp * p, yaws[k] + s.AY[i] - s.cy * p);
-      }
-      if (i < n - 1) {
-        requestAnimationFrame(frame);
-       } else {
-        var sum = 0;
-        for (var j = 0; j < act.length; j++) {
-          var ff = FACES[vals[j]];
-          setOri(act[j], ff[0], ff[1], yaws[j]);
-          sum += vals[j];
+        var s = sims[k];
+        if (frozen[k]) continue;   // settled already: leave its scene untouched
+        allFrozen = false;
+        var p = s.PL[i], f = FACES[vals[k]];
+        // Pull the tumble onto the dealt face with a smoothstep of how far the
+        // die has travelled: barely at first, firmly as it slows. The ramp is
+        // mapped to finish at 90% of the path and then held, so the correction
+        // has stopped moving before the die freezes - otherwise it was still
+        // turning the die a little on the very last painted frame, which read
+        // as the spin cutting off.
+        var t = Math.min(1, p / 0.9);
+        var ease = t * t * (3 - 2 * t);
+        var x = s.X[i], y = s.Y[i], z = s.Z[i];
+        var r = f[0] + s.AR[i] - s.cr * ease;
+        var pi = f[1] + s.AP[i] - s.cp * ease;
+        var yy = yaws[k] + s.AY[i] - s.cy * ease;
+        // Only write when the change is big enough to see. A die on its slow
+        // tail would otherwise re-render its whole scene for a fraction of a
+        // pixel, and those frames are most of a roll.
+        var q = last[k];
+        if (!q || Math.abs(x - q.x) >= 0.5 || Math.abs(y - q.y) >= 0.5 ||
+            Math.abs(z - q.z) >= 0.004 || angGap(r, q.r) >= 0.25 ||
+            angGap(pi, q.pi) >= 0.25 || angGap(yy, q.yy) >= 0.25) {
+          place(act[k], x, y, z);
+          setOri(act[k], r, pi, yy);
+          last[k] = { x: x, y: y, z: z, r: r, pi: pi, yy: yy };
         }
-        rolling = false;
-        rollNo++;
-        history.unshift({ no: rollNo, vals: vals.slice(), sum: sum });
-        if (history.length > MAX_HISTORY) history.pop();
-        if (openId === 'h') renderHistory();
-        say(vals.map(function (v) { return SYMBOLS[v]; }).join('  ') + '  |  tap to throw again');
-        // The real-money throw waits on this and nothing else, so it fires from
-        // the settle frame rather than from the release: Dart must not settle
-        // the wagers while the dice are still moving.
-        toFlutter('DiceSettled', vals.join(','));
+        if (i >= s.settle) { frozen[k] = true; last[k] = null; }
       }
+      if (allFrozen || i >= n - 1) { finish(); return; }
+      requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
   }
